@@ -1,3 +1,17 @@
+## 2026-11-03 — v0.8.50 published and verified
+
+Release 41675510092 (attempt 2 after a starved macOS job; 52 assets), wrappers 41675510012, Docker 41675510045. Native audit 41710437654 and wheel audit 41718388489 accepted. PyPI files came from wheel run 41706418193; a duplicate `workflow_run` wheel run (41710320363) rebuilt different bytes, so that run's cancelled GPU-index job was rerun and the audit pointed at it. Closed #562, #564, #569, #570; #568 open (Metal falls back to CPU).
+
+## 2026-11-03 — v0.8.50 tagged; integration fixes; publication pending
+
+`v0.8.50` → `5c96e5521` (annotated). Gates on that tree: CI and Lint on `f40f45d6e` (same tree), Lint Deep on `5c96e5521`, SCNet qualification 41615896059 (both sizes, on main at `b6ec24da2`). Integration fixes after the SCNet squash:
+
+- `b6ec24da2` collapsed duplicated Metal `setenv` guards, which had broken every build.
+- `759e78a12` stubbed the #570 consent helper in `test_issue560_lid_only.py`, and routed three SCNet `char*`→`float*` casts through `void*` for cppcheck 2.7.
+- #571 restored the `"MTL"` match in `core_cpu_backend::is_metal`.
+
+Release run 41675510092, wrappers 41675510012 and Docker 41675510045 were in flight at hand-off. Native and wheel audits are pending (PLAN lanes R1–R2).
+
 ## 2026-11-03 — v0.8.50 Mini-BS-RoFormer, SCNet, MeanVC2, and #564/#567–#570
 
 Release v0.8.50 ships native Mini-BS-RoFormer V2.5 (#562) and SCNet/SCNet-large (#566)
