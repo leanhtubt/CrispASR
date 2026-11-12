@@ -447,7 +447,16 @@
       },
       "sample": "samples/jfk.wav",
       "expected_transcript": "ANd so, my fellow Americans, ask not what your country can do for you.. ASk what you can do for your country..",
-      "expected_transcript_source": "captured 2026-06-15 Kaggle T4 GPU ($KAGGLE_ACCOUNT) with --codec-model mimo-tokenizer-q4_k"
+      "expected_transcript_source": "captured 2026-06-15 Kaggle T4 GPU ($KAGGLE_ACCOUNT) with --codec-model mimo-tokenizer-q4_k",
+      "asr_extra_files": [
+        {
+          "repo": "cstr/mimo-tokenizer-GGUF",
+          "revision": "fa380f4c49a8e8c62c02c00d0da5e263fc5b0dcf",
+          "file": "mimo-tokenizer-q4_k.gguf",
+          "arg": "--codec-model"
+        }
+      ],
+      "_asr_extra_files_note": "The expected transcript was captured with --codec-model mimo-tokenizer-q4_k; without it the CLI exits 13 (tokenizer not found)."
     },
     {
       "name": "mimo-audio-tokenizer",
@@ -464,7 +473,11 @@
       },
       "sample": "samples/jfk.wav",
       "expected_transcript": "RVQ codes output — regression by codes-hash, not transcript",
-      "expected_transcript_source": "tokenizer outputs 8-channel RVQ codes; transcript field N/A"
+      "expected_transcript_source": "tokenizer outputs 8-channel RVQ codes; transcript field N/A",
+      "probe": "codes",
+      "probe_match_min": 0.99,
+      "_probe_note": "crispasr-model-probe codes prints the 8-channel RVQ codes for the sample; gate exact-match fraction >= probe_match_min vs the pinned code file.",
+      "probe_expected_codes": "tests/regression/pins/mimo-audio-tokenizer-jfk-codes.json"
     },
     {
       "name": "lid-cld3-f16",
@@ -482,7 +495,10 @@
       "sample": "samples/jfk.wav",
       "_sample_note": "Audio arg is ignored by the lid-cld3 backend; the LID_TEXT env var carries the actual input. samples/jfk.wav is a placeholder so the existing rebake harness doesn't need a special-case for text-LID backends.",
       "expected_transcript": "en",
-      "expected_transcript_source": "captured 2026-06-15 VPS — LID output on JFK audio/text (expected: en)"
+      "expected_transcript_source": "captured 2026-06-15 VPS — LID output on JFK audio/text (expected: en)",
+      "lid_mode": "text",
+      "lid_text": "And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
+      "_lid_note": "Text LID via crispasr-lid --text lid_text; gates the top-1 label."
     },
     {
       "name": "titanet-large",
@@ -500,7 +516,12 @@
       "sample": "samples/jfk.wav",
       "_sample_note": "Single speaker utterance for embedding capture; the per-speaker 192-D vector is what gets dumped.",
       "expected_transcript": "192-dim speaker embedding (regression by L2 norm + cosine)",
-      "expected_transcript_source": "titanet outputs embeddings, not transcripts — regression uses embedding similarity"
+      "expected_transcript_source": "titanet outputs embeddings, not transcripts — regression uses embedding similarity",
+      "probe": "embedding",
+      "probe_cos_min": 0.999,
+      "_probe_note": "crispasr-model-probe embedding prints the 192-d TitaNet embedding of the sample; gate cosine >= probe_cos_min and |norm ratio-1| <= 1% vs probe_expected_embedding (captured on the GH ubuntu-latest CPU runner).",
+      "probe_expected_embedding": [-0.01422656, 0.07284123, 0.03919667, 0.07282018, 0.01312586, 0.06208214, -0.03553401, 0.08949526, 0.0151472, 0.03934078, 0.1119483, 0.0336715, 0.1317791, -0.08692908, -0.09264721, 0.09009522, 0.0293401, 0.06047769, -0.09956479, 0.1094832, -0.04562634, -0.1086986, -0.101505, 0.02803766, -0.02005209, 0.07275987, 0.1006045, -0.04965804, 0.09347182, 0.01395601, 0.05445845, 0.04393103, -0.01209165, -0.08222275, 0.1656468, -0.04181299, -0.02701076, 0.02192929, 0.0822707, -0.08864183, -0.05947656, 0.1528473, 0.005989311, -0.03159685, -0.0175444, -0.116137, 0.0572309, 0.07834741, -0.0283955, -0.07001263, 0.02721456, -0.05355395, -0.04077581, -0.04837242, -0.06907789, -0.130128, -0.05644364, 0.05486332, 0.05669972, 0.02327788, 0.01471411, 0.05467341, 0.03896982, 0.1012098, -0.03984438, -0.03412052, -0.05682231, 0.1104989, 0.01279585, -0.1088935, -0.04700678, 0.02501521, 0.06543048, -0.09587351, 0.04049444, 0.1197707, -0.1172514, -0.1004218, 0.03591148, -0.01228001, -0.04485241, -0.1332456, 0.2061601, -0.08587515, 0.03542951, 0.001884526, -0.0262576, 0.007676775, -0.0215656, 0.2240171, 0.06767984, -0.03598554, -0.04290619, 0.03714158, -0.01951673, -0.01603829, 0.0591598, -0.1306238, 0.09926687, 0.006712074, 0.05843726, -0.05661245, 0.0154278, 0.01253522, 0.03790955, -0.01075339, -0.006913382, -0.03071806, 0.0124645, -0.05884709, -0.1135234, -0.03874825, -0.02889632, 0.0444375, -0.05826692, 0.0297671, 0.1339543, -0.006608685, 0.09529355, -0.02451197, -0.01884506, -0.05413163, 0.01512514, 0.09967928, 0.05592154, 0.01340708, -0.05718787, -0.1129189, 0.08307953, -0.008324754, -0.06669123, 0.03945004, -0.05009897, -0.1548772, -0.08010484, 0.0238903, 0.09842946, 0.02698843, -0.02013, 0.1204715, -0.01576675, 0.06830021, -0.08381481, -0.003072568, 0.1224259, -0.05861025, 0.01177351, 0.04446897, 0.03162013, 0.04750747, -0.05377769, -0.03017358, 0.007653155, 0.1134215, -0.05241736, 0.03500234, -0.03496454, -0.08308247, 0.1466877, -0.006846811, -0.07134978, -0.04603018, 0.1346585, 0.04549057, 0.06981219, -0.08218249, -0.1518292, 0.04542426, -0.04128776, 0.1117589, 0.02162037, 0.07006564, 0.03067037, -0.04373443, -0.07330406, 0.05656385, 0.02276973, 0.0810414, -0.0449698, -0.004280314, -0.03658137, -0.02576609, 0.07376686, -0.04061755, -0.01010764, 0.1019177, 0.01840964, -0.1042904, -0.1497201, -0.06083642, -0.06896392, -0.03873007],
+      "_probe_expected_source": "captured by crispasr-model-probe on GH ubuntu-latest CPU, run 42821278216 (native regression pin, not upstream parity)"
     },
     {
       "name": "wav2vec2-xlsr-en",
@@ -895,7 +916,11 @@
       "sample": "samples/jfk.wav",
       "expected_transcript": "en",
       "expected_transcript_source": "captured 2026-06-15 VPS — LID output on JFK audio/text (expected: en)",
-      "skip_diff": true
+      "skip_diff": true,
+      "lid_mode": "audio",
+      "lid_backend": "firered",
+      "lid_host_asr": "moonshine-tiny",
+      "_lid_note": "Audio LID: run_one.py runs the pinned moonshine-tiny host with -dl --lid-backend firered --lid-model <this gguf> and gates the 'LID -> language' label (moonshine has no native LID, so the label comes from this model)."
     },
     {
       "name": "silero-lid-lang95",
@@ -909,7 +934,11 @@
       "sample": "samples/jfk.wav",
       "expected_transcript": "en",
       "expected_transcript_source": "captured 2026-06-15 VPS — LID output on JFK audio/text (expected: en)",
-      "skip_diff": true
+      "skip_diff": true,
+      "lid_mode": "audio",
+      "lid_backend": "silero",
+      "lid_host_asr": "moonshine-tiny",
+      "_lid_note": "Audio LID: run_one.py runs the pinned moonshine-tiny host with -dl --lid-backend silero --lid-model <this gguf> and gates the 'LID -> language' label (moonshine has no native LID, so the label comes from this model)."
     },
     {
       "name": "fasttext-lid176",
@@ -925,7 +954,10 @@
       "expected_transcript_source": "captured 2026-06-15 VPS — LID output on JFK audio/text (expected: en)",
       "skip_diff": true,
       "source_model": "facebook/fasttext-language-identification",
-      "source_model_note": "Added 2026-09-07 to unblock the Kaggle rebake, which refused every entry with 'manifest entry has no source_model'. Taken from this model's own published GGUF card in hf_readmes/ where one exists, otherwise HEADed against the HF API before being written — a fuzzy card match had produced granite-speech-4.1-2b -> granite-speech-3.2-8b, which is wrong and was caught by printing which card each id came from."
+      "source_model_note": "Added 2026-09-07 to unblock the Kaggle rebake, which refused every entry with 'manifest entry has no source_model'. Taken from this model's own published GGUF card in hf_readmes/ where one exists, otherwise HEADed against the HF API before being written — a fuzzy card match had produced granite-speech-4.1-2b -> granite-speech-3.2-8b, which is wrong and was caught by printing which card each id came from.",
+      "lid_mode": "text",
+      "lid_text": "And so my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
+      "_lid_note": "Text LID via crispasr-lid --text lid_text; gates the top-1 label."
     },
     {
       "name": "ecapa-lid-107",
@@ -941,7 +973,11 @@
       "expected_transcript_source": "captured 2026-06-15 VPS — LID output on JFK audio/text (expected: en)",
       "skip_diff": true,
       "source_model": "speechbrain/lang-id-voxlingua107-ecapa",
-      "source_model_note": "Added 2026-09-07 to unblock the Kaggle rebake, which refused every entry with 'manifest entry has no source_model'. Taken from this model's own published GGUF card in hf_readmes/ where one exists, otherwise HEADed against the HF API before being written — a fuzzy card match had produced granite-speech-4.1-2b -> granite-speech-3.2-8b, which is wrong and was caught by printing which card each id came from."
+      "source_model_note": "Added 2026-09-07 to unblock the Kaggle rebake, which refused every entry with 'manifest entry has no source_model'. Taken from this model's own published GGUF card in hf_readmes/ where one exists, otherwise HEADed against the HF API before being written — a fuzzy card match had produced granite-speech-4.1-2b -> granite-speech-3.2-8b, which is wrong and was caught by printing which card each id came from.",
+      "lid_mode": "audio",
+      "lid_backend": "ecapa",
+      "lid_host_asr": "moonshine-tiny",
+      "_lid_note": "Audio LID: run_one.py runs the pinned moonshine-tiny host with -dl --lid-backend ecapa --lid-model <this gguf> and gates the 'LID -> language' label (moonshine has no native LID, so the label comes from this model)."
     },
     {
       "name": "moss-audio-4b-instruct",
@@ -955,20 +991,6 @@
       "sample": "samples/jfk.wav",
       "expected_transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
       "expected_transcript_source": "captured 2026-06-15 Kaggle T4 GPU ($KAGGLE_ACCOUNT) on samples/jfk.wav",
-      "skip_diff": true
-    },
-    {
-      "name": "kugelaudio-0-open",
-      "backend_id": "kugelaudio",
-      "gguf": {
-        "repo": "cstr/kugelaudio-0-open-GGUF",
-        "revision": "f3796df6f2ab4c690f01da696a29aa7bd96a9739",
-        "file": "kugelaudio-0-open-q4_k.gguf",
-        "approx_size_mb": 5445
-      },
-      "sample": "samples/jfk.wav",
-      "expected_transcript": "TTS/audio-understanding backend — not a direct ASR transcriber; use --tts or --prompt for audio QA",
-      "expected_transcript_source": "kugelaudio outputs a TTS-only message when invoked with -f; audio understanding needs --prompt",
       "skip_diff": true
     },
     {
@@ -1276,14 +1298,23 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.15,
       "wer_max_note": "F5-TTS DiT flow-matching. Needs reference audio for voice cloning; without --voice uses built-in default.",
-      "voice_preset": "default"
+      "voice": {
+        "repo": "cstr/crispasr-regression-fixtures",
+        "revision": "98ba026354b6c4e6aed93550208e9c6f95e83df7",
+        "file": "pocket-tts/ref_voice_kokoro_af_heart.wav"
+      },
+      "voice_note": "Synthetic kokoro af_heart reference (not a real person), shared with pocket-tts-en; --i-have-rights satisfied synthetically.",
+      "tts_extra_args": [
+        "--i-have-rights"
+      ],
+      "tts_timeout_s": 1200
     },
     {
       "name": "parler-tts-mini-v1.1",
       "backend_id": "parler-tts",
       "gguf": {
         "repo": "cstr/parler-tts-mini-v1.1-GGUF",
-        "revision": "28d560d8d3a9a0ac0e603322094d306bdd5b573e",
+        "revision": "6dca98a243dd8464c819491504544957be1d9e17",
         "file": "parler-tts-mini-v1.1-q8_0.gguf",
         "approx_size_mb": 1000
       },
@@ -1291,7 +1322,7 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.2,
       "wer_max_note": "Parler TTS Mini v1.1 (~900M). T5 encoder + DAC decoder. Prompt-conditioned voice via --instruct.",
-      "voice_preset": "default"
+      "no_voice": true
     },
     {
       "name": "dia-1.6b",
@@ -1307,7 +1338,13 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.2,
       "wer_max_note": "Dia 1.6B dialogue TTS with CFG. 20% WER headroom for stochastic decode.",
-      "voice_preset": "default"
+      "voice_preset": "default",
+      "codec": {
+        "repo": "cstr/dia-1.6b-GGUF",
+        "revision": "3233fbcb32be47761d2e736857b6d1a075b9ba7e",
+        "file": "dac-44khz.gguf"
+      },
+      "tts_timeout_s": 900
     },
     {
       "name": "cosyvoice3-0.5b",
@@ -1329,7 +1366,16 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "CosyVoice3 needs five companion GGUFs beside the LLM (flow/hift/campplus/s3tok/voices); without them init fails with 'no flow GGUF found'.",
-      "voice_preset": "default"
+      "voice": {
+        "repo": "cstr/crispasr-regression-fixtures",
+        "revision": "98ba026354b6c4e6aed93550208e9c6f95e83df7",
+        "file": "pocket-tts/ref_voice_kokoro_af_heart.wav"
+      },
+      "voice_note": "Synthetic kokoro af_heart reference (not a real person), shared with pocket-tts-en; --i-have-rights satisfied synthetically.",
+      "tts_extra_args": [
+        "--i-have-rights"
+      ],
+      "tts_timeout_s": 900
     },
     {
       "name": "fastpitch-en",
@@ -1359,7 +1405,7 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "Initial placeholder — melotts roundtrip WER not yet measured.",
-      "voice_preset": "default"
+      "no_voice": true
     },
     {
       "name": "orpheus-3b-0.1-ft",
@@ -1374,7 +1420,13 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "Initial placeholder — orpheus roundtrip WER not yet measured.",
-      "voice_preset": "default"
+      "voice_preset": "tara",
+      "codec": {
+        "repo": "cstr/snac-24khz-GGUF",
+        "revision": "23441bacb71a70ad8962262e1ad7fae482d3c296",
+        "file": "snac-24khz.gguf"
+      },
+      "tts_timeout_s": 900
     },
     {
       "name": "outetts-0.3-1b",
@@ -1383,14 +1435,18 @@
         "repo": "cstr/outetts-0.3-1b-GGUF",
         "revision": "fdd6560ab48bb197ad4a2b92d2a1fd93ac115f05",
         "file": "outetts-0.3-1b-q4_k.gguf",
-        "approx_size_mb": 801,
-        "_companion_note": "Also needs wavtokenizer-decoder-f16.gguf"
+        "approx_size_mb": 801
       },
       "tts_phrase": "The quick brown fox jumps over the lazy dog",
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "Initial placeholder — outetts roundtrip WER not yet measured.",
-      "voice_preset": "default"
+      "voice_preset": "default",
+      "codec": {
+        "repo": "cstr/outetts-0.3-1b-GGUF",
+        "revision": "fdd6560ab48bb197ad4a2b92d2a1fd93ac115f05",
+        "file": "wavtokenizer-decoder-f16.gguf"
+      }
     },
     {
       "name": "tada-tts-3b-ml",
@@ -1405,7 +1461,18 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "Initial placeholder — tada-tts roundtrip WER not yet measured.",
-      "voice_preset": "default"
+      "voice": {
+        "repo": "cstr/tada-tts-3b-ml-GGUF",
+        "revision": "46dc13c58345074de8817c9ad1327fc764f0ed98",
+        "file": "tada-ref.gguf"
+      },
+      "voice_note": "Was `voice_preset: default`, which the tada CLI treats as 'discover a ref next to the model'; the harness downloads only the model, so none was found and TADA ran with NO prompt (upstream generate() has no unprompted mode) -> near-silence, empty transcript, WER 1.0 (run 42820528553). Pin the repo's default JFK tada-ref.gguf at 46dc13c5 (at b41c671e that file is an old stage dump with no prompt_token_values, which tada_load_prompt rejects). tada_synthesize now refuses to run without a prompt.",
+      "codec": {
+        "repo": "cstr/tada-tts-3b-ml-GGUF",
+        "revision": "b41c671e7fdcb69888b61273ea5ca840c88183b5",
+        "file": "tada-codec-f16.gguf"
+      },
+      "tts_timeout_s": 900
     },
     {
       "name": "tada-codec",
@@ -1437,7 +1504,13 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "Initial placeholder — zonos roundtrip WER not yet measured.",
-      "voice_preset": "default"
+      "voice_preset": "default",
+      "codec": {
+        "repo": "cstr/dac-44khz-GGUF",
+        "revision": "2a20efd49e6596e1885a248dae9e112af2dd8ba7",
+        "file": "dac-44khz-f16.gguf"
+      },
+      "tts_timeout_s": 900
     },
     {
       "name": "voxcpm2-tts-2b",
@@ -1470,7 +1543,16 @@
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "IndexTTS-1.5 GPT + BigVGAN. Needs reference WAV for voice cloning.",
-      "voice_preset": "default"
+      "voice": {
+        "repo": "cstr/crispasr-regression-fixtures",
+        "revision": "98ba026354b6c4e6aed93550208e9c6f95e83df7",
+        "file": "pocket-tts/ref_voice_kokoro_af_heart.wav"
+      },
+      "voice_note": "Synthetic kokoro af_heart reference (not a real person), shared with pocket-tts-en; --i-have-rights satisfied synthetically.",
+      "tts_extra_args": [
+        "--i-have-rights"
+      ],
+      "tts_timeout_s": 900
     },
     {
       "name": "chatterbox-turbo-s3gen",
@@ -1478,15 +1560,36 @@
       "gguf": {
         "repo": "cstr/chatterbox-turbo-GGUF",
         "revision": "1c7e7f8886aed773fb12970edf4d4f65a67d4b85",
-        "file": "chatterbox-turbo-s3gen-f16-regen.gguf",
-        "approx_size_mb": 627,
-        "_companion_note": "Also needs chatterbox-turbo-t3 model (auto-located)."
+        "file": "chatterbox-turbo-t3-q8_0.gguf",
+        "approx_size_mb": 980
       },
       "tts_phrase": "The quick brown fox jumps over the lazy dog",
       "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
       "wer_max": 0.3,
       "wer_max_note": "ChatterboxTurbo meanflow TTS. Uses built-in voice.",
-      "voice_preset": "default"
+      "codec": {
+        "repo": "cstr/chatterbox-turbo-GGUF",
+        "revision": "1c7e7f8886aed773fb12970edf4d4f65a67d4b85",
+        "file": "chatterbox-turbo-s3gen-f16-regen.gguf"
+      },
+      "no_voice": true,
+      "_model_note": "-m is the T3 model; the regenerated s3gen is passed via --codec-model (previously -m pointed at s3gen and T3 load failed)."
+    },
+    {
+      "name": "kugelaudio-0-open",
+      "backend_id": "kugelaudio",
+      "gguf": {
+        "repo": "cstr/kugelaudio-0-open-GGUF",
+        "revision": "f3796df6f2ab4c690f01da696a29aa7bd96a9739",
+        "file": "kugelaudio-0-open-q4_k.gguf",
+        "approx_size_mb": 5445
+      },
+      "tts_phrase": "The quick brown fox jumps over the lazy dog",
+      "roundtrip_asr_backend": "parakeet-tdt-0.6b-en",
+      "wer_max": 0.3,
+      "wer_max_note": "KugelAudio-0-open TTS roundtrip; was a stub ASR entry pinning a placeholder sentence.",
+      "no_voice": true,
+      "tts_timeout_s": 1800
     }
   ],
   "align_backends_note": "Forced aligners run `crispasr --align-only` on the pinned GGUF and compare the JSON word alignment with expected_words: identical normalized words, every start/end within tolerance_s. expected_source names where the expected words came from; an upstream reference is preferred over a native capture. Qwen3 timestamps are 80 ms classes, so 0.081 s allows one class of cross-CPU drift.",

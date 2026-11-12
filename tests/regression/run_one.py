@@ -264,7 +264,7 @@ def strip_ai_disclaimer(transcript: str) -> str:
 
 
 def run_transcript(crispasr_bin: Path, gguf: Path, sample: Path, *, srt: bool = False,
-                   label: str = "transcript") -> str:
+                   label: str = "transcript", extra_args: list[str] | None = None) -> str:
     """Run `crispasr -m gguf -f sample`, return the transcript line.
 
     The CLI prints the transcript on its own line near the end, after
@@ -284,7 +284,7 @@ def run_transcript(crispasr_bin: Path, gguf: Path, sample: Path, *, srt: bool = 
             return " ".join(line.strip() for line in cues.splitlines()
                             if line.strip() and not line.strip().isdigit() and "-->" not in line)
     proc = _run_captured(
-        [str(crispasr_bin), "-m", str(gguf), "-f", str(sample)],
+        [str(crispasr_bin), "-m", str(gguf), "-f", str(sample)] + list(extra_args or []),
         check=True,
         timeout=600,
         label=label,
@@ -308,6 +308,118 @@ _DIFF_LINE = re.compile(
     r"^\[(PASS|FAIL)\]\s+(\S+)\s+shape=\[\S+\]\s+cos_min=([0-9.\-eE]+)\s+cos_mean=([0-9.\-eE]+)"
 )
 
+
+
+def run_lid(entry: dict, manifest: dict, lid_gguf: Path, sample: Path,
+            work_dir: Path, crispasr_bin: Path) -> str:
+    """Return the language label a LID model assigns, for `lid_mode` entries.
+
+    LID models emit a label, not a transcript, so plain `crispasr -m lid.gguf`
+    cannot drive them (it exits 3). Two modes:
+
+    * ``text``  - text LID (CLD3 / fastText): ``crispasr-lid -m gguf --text
+      <lid_text>``; first field of the first output line.
+    * ``audio`` - audio LID (silero / ecapa / firered): run the pinned host ASR
+      entry ``lid_host_asr`` with ``-dl --lid-backend <lid_backend> --lid-model
+      gguf`` and parse the ``LID -> language = 'xx'`` status line, so the label
+      comes from the model under test, never from the host ASR.
+    """
+    import re
+    mode = entry["lid_mode"]
+    if mode == "text":
+        lid_bin = crispasr_bin.parent / "crispasr-lid"
+        if not lid_bin.exists():
+            die(f"crispasr-lid binary not found at {lid_bin}; build target crispasr-lid")
+        proc = _run_captured([str(lid_bin), "-m", str(lid_gguf), "--text", entry["lid_text"],
+                              "--quiet"], check=True, timeout=120, label="lid-text")
+        lines = [ln.split() for ln in proc.stdout.splitlines() if ln.strip()]
+        if not lines:
+            die(f"crispasr-lid produced no output; stderr tail: ...{proc.stderr[-400:]}")
+        return lines[0][0]
+    if mode != "audio":
+        die(f"unknown lid_mode {mode!r}")
+    host = next((b for b in manifest["backends"] if b["name"] == entry["lid_host_asr"]), None)
+    if host is None:
+        die(f"lid_host_asr={entry['lid_host_asr']!r} not in manifest.backends")
+    host_gguf = hf_download(host["gguf"]["repo"], host["gguf"]["file"],
+                            host["gguf"]["revision"], work_dir)
+    for companion in host["gguf"].get("companion_files", []):
+        c_local = hf_download(host["gguf"]["repo"], companion, host["gguf"]["revision"], work_dir)
+        dest = host_gguf.parent / Path(companion).name
+        if not dest.exists():
+            shutil.copy2(c_local, dest)
+    proc = _run_captured([str(crispasr_bin), "--backend", host["backend_id"], "-m", str(host_gguf),
+                          "-f", str(sample), "-dl", "--lid-backend", entry["lid_backend"],
+                          "--lid-model", str(lid_gguf)],
+                         check=True, timeout=600, label="lid-audio")
+    # Two status formats: the LID module's own "crispasr[lid]: detected 'xx'
+    # (p=..) via <backend>" and the run loop's "LID -> language = 'xx' (<src>, p=..)".
+    found = [(m.group(1), m.group(2)) for m in
+             re.finditer(r"crispasr\[lid\]: detected '([^']*)' \(p=[^)]*\) via (\S+)", proc.stderr)]
+    found += re.findall(r"LID -> language = '([^']*)' \(([^,]*),", proc.stderr)
+    if not found:
+        die(f"no LID result line from --lid-backend {entry['lid_backend']}; "
+            f"stderr tail: ...{proc.stderr[-400:]}")
+    label, source = found[0]
+    print(f"  lid source: {source}")
+    if entry["lid_backend"] not in source:
+        die(f"LID label came from {source!r}, not --lid-backend {entry['lid_backend']}")
+    return label
+
+
+def run_probe(entry: dict, gguf: Path, sample: Path, crispasr_bin: Path) -> int:
+    """Gate a model whose output is not text, via `crispasr-model-probe`.
+
+    The probe prints one JSON object. Kinds:
+
+    * ``embedding`` (titanet) - ``{"dim", "embedding"}``; gate cosine >=
+      ``probe_cos_min`` against the pinned ``probe_expected_embedding``.
+    * ``codes`` (mimo-tokenizer) - ``{"n_codes", "codes"}``; gate the fraction
+      of codes equal to the pinned ``probe_expected_codes`` >= ``probe_match_min``
+      (RVQ argmin can flip a rare near-tie across CPU ISAs).
+
+    With no pinned value yet the probe prints CAPTURE and fails, so a missing
+    pin can never pass silently.
+    """
+    probe_bin = crispasr_bin.parent / "crispasr-model-probe"
+    if not probe_bin.exists():
+        die(f"crispasr-model-probe binary not found at {probe_bin}; build target crispasr-model-probe")
+    kind = entry["probe"]
+    proc = _run_captured([str(probe_bin), kind, str(gguf), str(sample)],
+                         check=True, timeout=900, label=f"probe-{kind}")
+    out = json.loads(proc.stdout)
+    if kind == "embedding":
+        got = out["embedding"]
+        want = entry.get("probe_expected_embedding")
+        if not want:
+            print(f"\033[31m  CAPTURE\033[0m  no pinned embedding; got {json.dumps(got)}")
+            return 1
+        if len(got) != len(want):
+            print(f"\033[31m  FAIL\033[0m  dim {len(got)} != pinned {len(want)}")
+            return 1
+        dot = sum(a * b for a, b in zip(got, want))
+        cos = dot / (math.sqrt(sum(a * a for a in got)) * math.sqrt(sum(b * b for b in want)) or 1.0)
+        norm_ratio = math.sqrt(sum(a * a for a in got)) / (math.sqrt(sum(b * b for b in want)) or 1.0)
+        ok = cos >= float(entry.get("probe_cos_min", 0.999)) and abs(norm_ratio - 1.0) <= 0.01
+        print(f"\033[{32 if ok else 31}m  {'PASS' if ok else 'FAIL'}\033[0m  "
+              f"cos={cos:.6f} (min {entry.get('probe_cos_min', 0.999)}) norm_ratio={norm_ratio:.5f}")
+        return int(not ok)
+    if kind == "codes":
+        got = out["codes"]
+        want_file = entry.get("probe_expected_codes")
+        if not want_file:
+            print(f"\033[31m  CAPTURE\033[0m  no pinned codes; got {json.dumps(out)}")
+            return 1
+        want = json.loads((REPO_ROOT / want_file).read_text())["codes"]
+        if len(got) != len(want):
+            print(f"\033[31m  FAIL\033[0m  {len(got)} codes != pinned {len(want)}")
+            return 1
+        match = sum(a == b for a, b in zip(got, want)) / max(1, len(want))
+        ok = match >= float(entry.get("probe_match_min", 0.99))
+        print(f"\033[{32 if ok else 31}m  {'PASS' if ok else 'FAIL'}\033[0m  "
+              f"code match={match:.4f} over {len(want)} (min {entry.get('probe_match_min', 0.99)})")
+        return int(not ok)
+    die(f"unknown probe kind {kind!r}")
 
 def parse_diff_stdout(stdout: str) -> dict[str, float]:
     """Parse a crispasr-diff stdout blob into {stage_name: cos_min}.
@@ -562,10 +674,24 @@ def regression_for(name: str, manifest: dict, work_dir: Path,
             raise ValueError("Transcript provenance requires an independent reference dump")
         verify_transcript_reference(entry, ref_local, sample, work_dir)
 
-    # ----- 1. Transcript -----
-    print(f"\n[transcript] {name}")
-    actual = run_transcript(crispasr_bin, gguf_local, sample,
-                            srt=entry.get("transcript_format") == "srt")
+    # ----- 1. Transcript (or language-ID label for `lid_mode` entries) -----
+    if "probe" in entry:
+        print(f"\n[probe] {name}")
+        return run_probe(entry, gguf_local, sample, crispasr_bin)
+    # `asr_extra_files`: pinned files from any repo, each passed as `<arg> <path>`
+    # (e.g. mimo-asr's audio tokenizer via --codec-model).
+    extra_args: list[str] = []
+    for extra in entry.get("asr_extra_files", []):
+        local = hf_download(extra["repo"], extra["file"], extra["revision"], work_dir)
+        extra_args += [extra["arg"], str(local)]
+    if entry.get("lid_mode"):
+        print(f"\n[lid] {name}")
+        actual = run_lid(entry, manifest, gguf_local, sample, work_dir, crispasr_bin)
+    else:
+        print(f"\n[transcript] {name}")
+        actual = run_transcript(crispasr_bin, gguf_local, sample,
+                                srt=entry.get("transcript_format") == "srt",
+                                extra_args=extra_args)
     # WER-normalised gate, shared with the Kaggle suite; see transcript_gate.
     ok, lines = transcript_gate(entry, actual)
     for ln in lines:
@@ -751,12 +877,13 @@ def tts_roundtrip_for(name: str, manifest: dict, work_dir: Path,
         syn_cmd += ["--codec-model", str(codec_local)]
     syn_cmd += list(entry.get("tts_extra_args", []))
     try:
-        proc = _run_captured(syn_cmd, check=False, timeout=300, label="tts-synth")
+        tts_timeout = int(entry.get("tts_timeout_s", 300))
+        proc = _run_captured(syn_cmd, check=False, timeout=tts_timeout, label="tts-synth")
     except subprocess.TimeoutExpired:
         _preserve_tts_wav(name, out_wav)
         if advisory:
-            return advisory_skip("TTS synth timed out after 300 s")
-        die(f"{name}: TTS synth timed out after 300 s")
+            return advisory_skip(f"TTS synth timed out after {tts_timeout} s")
+        die(f"{name}: TTS synth timed out after {tts_timeout} s")
     if proc.returncode != 0:
         _preserve_tts_wav(name, out_wav)
         if advisory:
