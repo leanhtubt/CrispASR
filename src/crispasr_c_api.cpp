@@ -1692,6 +1692,12 @@ CA_EXPORT int crispasr_detect_backends_from_gguf(const char* path, char* out, in
         gguf_free(gctx);
         return -3;
     }
+    // GGUF getters assert on a mismatched type; malformed model metadata
+    // must return an error rather than abort the process hosting the C ABI.
+    if (gguf_get_kv_type(gctx, key_id) != GGUF_TYPE_STRING) {
+        gguf_free(gctx);
+        return -4;
+    }
     const char* arch = gguf_get_val_str(gctx, key_id);
     if (!arch) {
         gguf_free(gctx);
@@ -1733,6 +1739,12 @@ CA_EXPORT int crispasr_detect_backend_from_gguf(const char* path, char* out_name
         gguf_free(gctx);
         return -3;
     }
+    // GGUF getters assert on a mismatched type; malformed model metadata
+    // must return an error rather than abort the process hosting the C ABI.
+    if (gguf_get_kv_type(gctx, key_id) != GGUF_TYPE_STRING) {
+        gguf_free(gctx);
+        return -4;
+    }
     const char* arch = gguf_get_val_str(gctx, key_id);
     if (!arch) {
         gguf_free(gctx);
@@ -1755,10 +1767,14 @@ CA_EXPORT int crispasr_detect_backend_from_gguf(const char* path, char* out_name
     if (std::strcmp(backend, "parakeet") == 0 && core_parakeet_gguf::compatible_ctc(gctx))
         backend = "fastconformer-ctc";
 
-    std::strncpy(out_name, backend, out_cap - 1);
-    out_name[out_cap - 1] = '\0';
+    const size_t backend_size = std::strlen(backend);
+    if (backend_size + 1 > (size_t)out_cap) {
+        gguf_free(gctx);
+        return -5;
+    }
+    std::memcpy(out_name, backend, backend_size + 1);
     gguf_free(gctx);
-    return (int)std::strlen(out_name);
+    return (int)backend_size;
 }
 
 // =========================================================================

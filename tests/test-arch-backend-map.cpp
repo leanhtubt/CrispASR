@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "core/arch_backend_map.h"
+#include "crispasr_session.h"
 
 #include "gguf.h"
 
@@ -157,6 +158,7 @@ TEST_CASE("unknown / empty architectures resolve to the empty string", "[unit][a
     CHECK(core_arch::backend_for_arch(static_cast<const char*>(nullptr)) == std::string(""));
     CHECK(core_arch::backend_for_arch("bert") == std::string(""));
     CHECK(core_arch::backend_for_arch("crispasr.reference") == std::string(""));
+    CHECK(core_arch::backend_for_arch("reuse") == std::string(""));
     CHECK(core_arch::backend_for_arch("kokoro-voice") == std::string(""));
     CHECK(core_arch::backend_for_arch("cosyvoice3-s3tok") == std::string(""));
     // Backend-name aliases are not additional checkpoint architecture profiles.
@@ -355,6 +357,13 @@ static std::string write_stub_gguf(const std::string& arch) {
     return path;
 }
 
+TEST_CASE("RE-USE research GGUF is not opened as a product session", "[unit][arch-map]") {
+    const std::string path = write_stub_gguf("reuse");
+    crispasr_session* session = crispasr_session_open(path.c_str(), 1);
+    std::remove(path.c_str());
+    REQUIRE(session == nullptr);
+}
+
 TEST_CASE("crispasr_detect_backend_from_gguf reads the shared table", "[unit][arch-map]") {
     // A metadata-only GGUF with nothing but general.architecture: no tensors,
     // no weights, no model download. This is the exact reproduction of #335 —
@@ -372,6 +381,7 @@ TEST_CASE("crispasr_detect_backend_from_gguf reads the shared table", "[unit][ar
         {"whisper", "whisper"},        // was already shared — must not regress
         {"mini-bs-roformer", "mini-bs-roformer"},
         {"scnet", "scnet"},
+        {"reuse", ""}, // RE-USE is research-only; never auto-open it as a product backend.
         {"mini_bs_roformer", ""},
         {"mini-bs-roformer-v2.5", ""},
         {"not-a-real-architecture", ""},

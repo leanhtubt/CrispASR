@@ -5160,6 +5160,15 @@ catch_discover_tests(test-audio-formats
     PROPERTIES LABELS "unit;audio"
 )
 
+# Shared voice-reference WAV parser: header-only, no models or library linkage.
+add_executable(test-wav-reader test-wav-reader.cpp)
+target_include_directories(test-wav-reader PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test-wav-reader PRIVATE Catch2::Catch2WithMain)
+catch_discover_tests(test-wav-reader
+    TEST_SPEC "[wav-reader]"
+    PROPERTIES LABELS "unit;audio"
+)
+
 # ─── test-audio-chunking — Catch2 unit tests for audio_chunking::find_energy_min_split
 #
 # Covers the energy-minimum detection helper directly: quiet window selection,
@@ -6187,6 +6196,17 @@ catch_discover_tests(test-arch-backend-map
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
 )
 
+# Malformed architecture metadata must not abort a process hosting the C ABI.
+# Metadata calls run in child processes; capacity controls also check complete
+# names, exact-fit buffers and output sentinels. No model weights are needed.
+if(BUILD_SHARED_LIBS AND Python3_Interpreter_FOUND)
+    add_test(NAME gguf-detector-metadata COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/test_gguf_detector_metadata.py
+        --library $<TARGET_FILE:crispasr-lib>)
+    set_tests_properties(gguf-detector-metadata PROPERTIES
+        LABELS "unit;c-abi;arch-map" TIMEOUT 120)
+endif()
+
 # ─── #551: real GGUF schema routing and C ABI/CLI rejection (no weights)
 add_executable(test-parakeet-gguf test-parakeet-gguf.cpp)
 target_include_directories(test-parakeet-gguf PRIVATE ${PROJECT_SOURCE_DIR}/src)
@@ -6840,6 +6860,10 @@ set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES
 # These source-compiled controls use GCC/Clang flags. MSVC receives the full
 # production build and model surface test when weights are explicitly supplied.
 if (Python3_Interpreter_FOUND AND NOT MSVC)
+    add_test(NAME server-context
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/test-server-context.py -v)
+    set_tests_properties(server-context PROPERTIES
+        LABELS "unit;server;context" TIMEOUT 120 ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}")
     add_test(NAME scnet-math
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-scnet-math.py -v)
     set_tests_properties(scnet-math PROPERTIES
@@ -6867,6 +6891,17 @@ if (Python3_Interpreter_FOUND)
     add_test(NAME scnet-reference
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-scnet-reference.py -v)
     set_tests_properties(scnet-reference PROPERTIES LABELS "unit;scnet" TIMEOUT 120)
+endif()
+
+# Quantizer diagnostics and row-wise Nemotron-H expert-bank storage. Uses
+# synthetic GGUFs and compares all bank bytes with equivalent 2-D matrices.
+if(Python3_Interpreter_FOUND AND CRISPASR_BUILD_EXAMPLES)
+    add_test(NAME test-quantizer-reporting
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-quantizer-reporting.py
+            $<TARGET_FILE:crispasr-quantize>)
+    set_tests_properties(test-quantizer-reporting PROPERTIES
+        LABELS "unit;gh;quantization"
+        TIMEOUT 120)
 endif()
 
 # SCNet routing and exact quantizer policy are model-free. Actual CLI/Session

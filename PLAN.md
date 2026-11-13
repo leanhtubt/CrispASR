@@ -12,7 +12,102 @@ acceptance) is in [the handoff, "Open tasks"](docs/maintenance-handoff.md#open-t
 
 ## NOW — open lanes, fully scoped (2026-11-03)
 
+### Ultra local-head C# binding — complete Codex (2026-11-13)
+
+- Base `fc6950aca`; isolated `feat/ultra-csharp-interface-20261113`. Added the missing experimental C# local-head wrapper using the existing C ABI, owned UTF-8 text, fractional-second boundaries and deterministic native-result cleanup. Three new managed/native-stub execution tests first failed on the missing method and now pass 29 checks covering transport, precision, null/empty/invalid-count cleanup and invalid input. The full strict C# contract passes all 11 tests (357 checks), including older-library compatibility. The new tests run through the existing CTest and strict binding runner. Whitespace checks pass; no model, GPU, full-library build or CI dispatch and no broader model-quality claim.
+
+### Shared PCM16 WAV chunk traversal — complete Codex (2026-11-13)
+
+- Base `7e11bad81`; isolated `fix/core-audit-20261113`. Shared voice-reference parsing now consumes RIFF odd-byte padding, bounds unsigned non-data chunk traversal to real file bytes and rejects short/truncated formats and invalid rates. All three valid odd JUNK/LIST/fmt controls first failed on the old header. The fixed production-header Catch2 suite passes 89 assertions under ASan/UBSan, preserving stereo averages, partial-frame discard and truncated-data clamps; parallel process controls pass. Portable 64-bit seeks also pass an exact-PCM sparse-file control beyond 2 GiB with only 8 KiB allocated. Registered as a header-only unit target; clang-format 18 and whitespace checks pass. No model, full-library build, GPU or hosted dispatch.
+
+### Ultra local-head Rust binding — complete (2026-11-13)
+
+- Base `7e11bad81`; isolated `feat/rust-ultra-local-head-20261113`. Added the experimental Rust local-head wrapper and sys declarations using the existing C ABI, with owned UTF-8 text, fractional-second boundaries and RAII result cleanup. Three new native-stub execution tests cover transport, precision, null/empty/invalid-count cleanup and invalid input. The complete shared contract passes 54 Go probes, high-level Go compilation, 39 Rust probes and five Rust doc tests. New Rust code is formatted and whitespace checks pass. No model, GPU, full-library build or CI dispatch; broader model acceptance remains open.
+
+### Quantizer input preservation — Codex (2026-11-13)
+
+- Base `e210e7179`; isolated `fix/quantizer-same-file-20261113`. Reject input/output file identity before opening output with truncation, including symlink/hardlink aliases, and reopen input successfully before output creation. Three preservation guards first reproduced source destruction on the prior executable. All 14 actual-quantizer execution tests now pass, including seven new identical/normalized-path, both symlink directions, hardlink, missing-input and distinct-existing-output controls. Exact production quantizer sources compile against the existing ggml-base library; clang-format 18 and whitespace checks pass. No full-library/model build, GPU or CI job.
+
+### C ABI detector output capacity — complete (2026-11-13)
+
+- Base `e210e7179`; isolated `fix/cabi-guards-20261113`. The singular detector now matches the plural detector: insufficient capacity for the full backend name plus NUL returns `-5` with empty output, instead of returning a truncated name or reporting an unknown architecture at capacity one. All 70 model-free metadata/capacity checks pass against the exact compiled production detector definitions; the prior definitions fail the known/alternate short-buffer controls. Guard bytes, exact fits, unknown architectures, null arguments and nonpositive capacities are covered. Existing session-open buffers hold 64 bytes and the longest mapped backend uses 19. The public header documents the changed short-buffer behavior; no full library build or model-quality claim.
+
+### Ultra local-head Go binding — Codex (2026-11-13)
+
+- Base `c50d4afb4`; isolated `fix/ultra-bindings-20261113`. Added the missing experimental Go local-head wrapper using the existing C ABI, with float64-second intervals, UTF-8 text copied before result cleanup, bounded audio and FFI argument validation. Three new native-stub execution tests first failed on the missing wrapper and now pass, covering transport, fractional timing, null/empty/invalid-count cleanup and invalid input. The complete shared wrapper contract passes 54 Go probes, high-level Go package compilation, 36 Rust probes and five Rust doc tests. clang-format 18, gofmt and whitespace checks pass. No model, GPU or CI job and no broader model-quality claim.
+
+### C ABI architecture metadata validation — complete (2026-11-13)
+
+- Both GGUF backend detectors reject non-string `general.architecture` values
+  with `-4` and an empty output. The public header documents the error. The
+  38-case subprocess regression covers all scalar types, arrays and string
+  routing controls. The prior shared library aborts on 26 cases and wrongly
+  accepts two string-array cases; the exact fixed production detector definitions
+  pass all cases against the same ggml library. Registered in shared-build CTest;
+  no full library rebuild, hosted jobs or model-quality claim.
+
+### Quantizer fallback reporting — Codex (2026-11-13)
+
+- Base `8011652f5`; isolated `fix/quantizer-report-20261113`. Recognize `nemotron_h_moe` 3D expert banks using the existing row-wise writer and preserve their declared dimensions. Report global and per-tensor row-width substitutions and unsupported expert copies separately from intentional precision rules; correct zero-quantization reporting for casts and idempotent inputs. All seven new model-free execution cases (including Q3/Q4 subtests), seven selected CTests and clang-format 18 checks pass. Bank payloads match identical 2D matrices byte-for-byte; Q8-source requantization, overrides, unsupported rows and idempotency are covered. No full-model inference, CI/GPU dispatch or speech-quality claim.
+
+### RE-USE ten-second corpus reference chunking — Codex (2026-11-13)
+
+- Base `8011652f5`; isolated `diag/reuse-corpus-ten-second-20261113`. CPU kernel `crispasr-reuse-corpus-ten-second-20261113` version 1 completed four genuine ten-second LibriSpeech cases with the existing corpus/model datasets. Fresh original whole10s and three original5s / 2.5s-overlap outputs both improve the globally generated 5 dB white-noise inputs. Chunking reduces SNR by 0.052–0.330 dB versus whole-input inference; waveform relRMS differs by 2.08–4.53%. Three functional controls pass, all reported waveform metrics independently reproduce, and stored-window replay is sample-exact. All WAVs and eight selected actual intermediate tensors per forward are retained. See the [result](docs/historical/reuse-corpus-ten-second-20261113.json). This is original-only context/chunking evaluation; the separate completed `crispasr-diff` diagnostic below supplies bounded native parity. No GPU, CI or workflow concurrency changes.
+
+### RE-USE corpus native intermediate diagnostic — complete (2026-11-13)
+
+- Offline CPU kernel `crispasr-reuse-corpus-native-20261113` version 3 completed against frozen source `8d3b6aa39`. Both exact retained five-second inputs (speaker 61 white 10 dB and speaker 121 white 0 dB) pass all 71 unconditioned and 71 conditioned native stage gates. Independent log/archive/waveform checks confirm 284 passing rows, both full 75-tensor archives and sample-exact fresh versus retained original outputs. Native/reference waveform relRMS is `4.67e-7` and `5.58e-7`; see the [result](docs/historical/reuse-corpus-native-20261113.json). These data-informed cases establish bounded CPU research parity; representative noise, listening, longer native corpus inputs and product qualification remain open. No GPU, CI, dataset upload or concurrency-policy change.
+
+### RE-USE CPU corpus quality and deferred fused check — Codex (2026-11-12)
+
+- Offline CPU kernel `crispasr-re-use-quality-cpu-20261112` version 1 completed a 16-case, four-speaker LibriSpeech test-clean matrix. Source `8145ad0cb8b13faebf082cf08799cb5311618414` and uploaded script SHA-256 `e5bb069a930745389e180d393dcbfd00d8903c8ec49ec3011505a1936c0e13e9` match; all cases, waveform hashes, fingerprints and independently recomputed metrics passed verification against official OpenSLR inputs. The [receipt](docs/historical/reuse-quality-cpu-20261112.json) reports improvements on all 12 synthetic-noise cases, but one clean output and the separate JFK proxy show limitations. Fingerprints are not native comparisons; representative noise, listening and broader native corpus parity remain open; the two-case native diagnostic above now passes.
+- A separate [CPU ASR proxy](docs/historical/reuse-quality-cpu-asr-proxy-20261112.json) completed all 36 tiny.en invocations and compares each condition with the recognizer's clean-audio transcript. It is not human-reference WER or a product acceptance test.
+- The exact final-window original fused GPU diagnostic remains unexecuted. A local scheduler is set to submit it on 2026-11-14 at 00:05 UTC; the host and scheduler must remain available. Submission failures may be retried normally. Inspect the result before making a model or parity claim.
+
+### Kaggle output streamed recovery — Codex (2026-11-12)
+
+- Base `529e073f8`; `tools/kaggle/recover_output.py` recovers an exact latest-session output with bounded-memory streaming, explicit byte/hash verification and atomic publication. Its 19 model-free controls cover paginated selection, failure preservation and redacted errors. A live manifest download passed byte and hash verification. The unsupported SDK version selector returned HTTP 404 and was removed; usage and trust requirements are in the Kaggle README.
+
+### RE-USE rebuilt C ABI qualification — Codex (2026-11-12)
+
+- Source `529e073f8`; qualify an isolated shared-library build with the pinned real research GGUF, positive/null controls and architecture-map suite. No production RE-USE backend is registered. After explicit CPU authorization, the isolated shared-library build completed all 533 steps with two jobs. Real-GGUF detection/open rejection, Whisper metadata and null controls pass against the newly built library; the architecture-map suite passes 630 assertions across seven cases, with 11 alternate-mapping assertions across two further cases. The [candidate receipt](docs/historical/reuse-c-abi-candidate-20261112.json) pins source, libraries, model and logs. No CI or Kaggle job was required for this interface qualification.
+
+### RE-USE ten-second candidate — Codex (2026-11-12)
+
+- Base `7b4f0935a`; Kaggle kernel `crispasr-reuse-ten-second-20261112` version 1 ran frozen source `a5a46b6c5b616b7556d3bfa27335d33a95c74794`. All three 5 s windows with 2.5 s overlap passed 71 unconditioned and 71 conditioned stage checks, and the three reference archives were recovered and hash verified. The [receipt](docs/historical/reuse-ten-second-20261112.json) records a quality concern: on one noisy speech proxy, SI-SDR falls from 5.00 to 3.48 dB even as STOI rises from 0.631 to 0.715. The last five seconds account for most of the error. Investigate the original fused upstream reference and broader quality before qualifying product behavior; no product-support claim follows.
+
+### RE-USE long-audio qualification — Codex (2026-11-12)
+
+- Source `799ab5769`; keep the research interface separate from the unimplemented product API and preserve all stage gates. Kaggle `crispasr-reuse-long-audio-20261112` version 1 passed all 142 checks on each of nine overlapping one-second windows; its [receipt](docs/historical/reuse-chunked-five-second-20261112.json) records stitching, quality and the missing per-window archives. The first full five-second comparison failed before model stages because the oneMKL frontend retained a one-second cap; [the v1 receipt](docs/historical/reuse-full-window-v1-20261112.json) records that failure. After the frontend fix, `crispasr-reuse-full-window-20261112` version 2 passed all 142 stages with source `7b4f0935a`; its separate receipt records the recovered archive and bounded quality results. The ordinary comparator retains its one-second bound. All 24 isolated model-free CTests pass; the released v0.8.51 C ABI rejects the real research GGUF with positive and null controls, and the architecture-map suite passes 630 assertions against that released library. The rebuilt CPU candidate library also passes its [rejection-boundary controls](docs/historical/reuse-c-abi-candidate-20261112.json); representative quality and product interfaces remain open.
+
+### Main CI queue filters — complete (2026-11-12)
+
+- Source `799ab5769`; shipped `ae0e99ce1`. General heavy CI on main excludes ordinary documentation receipts and `lanes/`-only pushes while retaining the explicit receipt fixtures used by tests, mixed code changes, PR coverage, the security scan and documentation checks. Ordered path controls, workflow syntax and privacy checks passed locally. The subsequent main concurrency update `2b7673cee` supersedes push/PR runs by workflow and ref.
+
+### Selected extended regression on Kaggle — Codex (2026-11-12)
+
+- Source `853f04f09ebf8b0b574c79c0b95126eabdf7a2d9`. Ran the selected TADA, Parler and KugelAudio manifest entries on Kaggle against the pinned source because the existing Actions run was queued. Kaggle `crispasr-selected-regression-20261112` version 1 passed all three non-advisory CPU TTS-to-ASR roundtrips: Parler WER 0.1111 (limit 0.2), TADA 0.1111 (limit 0.3), and KugelAudio 0.0000 (limit 0.3). See the [run receipt](docs/historical/selected-tts-regression-20261112.json). This is one text input per backend, not broader voice, language or GPU qualification.
+
+### Server request context #588 HTTP/model validation — Codex (2026-11-13)
+
+- Base `8d3b6aa39`; all nine actual multipart HTTP/model cases pass on CPU with Qwen3-ASR 0.6B Q4_K. The [receipt](docs/historical/issue588-context-http-20261113.json) verifies exact tokenizer ChatML context bytes, real JFK speech, default/per-request/missing/empty restoration, prompt independence and both endpoints. The [live probe](tools/diagnostics/server_context_http.py) uses an unmodified server and a debugger observer; all 12 existing source controls also pass. Qwen3 omits `CAP_STREAMING`, so the two `stream=true` cases prove buffered fallback routing; genuine SSE and reporter-corpus language quality remain unqualified. No runtime changes, GPU use or CI dispatch.
+
+### Server request context #588 — Codex (2026-11-12)
+
+- Source `30d03c393`; integrated fix `317703f95`. Unsupported streaming requests bypassed the ignored-context warning. A shared once-only warning now covers buffered and streaming dispatch; 12 source-compiled controls cover defaults, both endpoints, per-request and concurrent isolation, capability declarations and warnings. The two streaming warning cases failed before the fix. Nine real CPU HTTP/model routing cases now pass (see the 2026-11-13 follow-up above); reporter-corpus language behavior remains open. Qwen3 does not advertise HTTP SSE support.
+
+### Extended regression coverage outcome — Codex (2026-11-12)
+
+- Source `30d03c393`. Queue-deferred scheduled extended runs appeared successful while testing no backends. The reporting change adds a visible, machine-readable outcome distinguishing deferred, executed and failed coverage without turning intentional deferral into a failed regression. The selected subset run [43228397799](https://github.com/CrispStrobe/CrispASR/actions/runs/43228397799), at `30d03c393`. The run was canceled before model execution after the newer-source Kaggle subset was submitted; it did not provide model coverage. Preserve the weekly and queue-aware scheduling policy.
+
+### RE-USE research reconciliation (2026-11-12)
+
+- Base `30d03c393`; frozen research source `2abc00b29`; review branch `work/reuse-reconcile-20261112`. Reconcile reference tools and fixtures without registering a product backend or changing production runtime/CMake wiring. Preserve historical 71-stage receipts and numerical gates. Acceptance: isolated CPU build, model-free fixtures and rejection controls, provenance checks, and documented remaining model/GPU/quality gates.
+- Candidate validation: 19 unique model-free CTests and three optional oneMKL controls pass. Existing 100 ms independent original-reference replay passes all 71 unconditioned and 71 conditioned rows with `mkl-avx2`. The [reconciliation record](docs/reuse-reconciliation-20261112.md) preserves exact source and receipt hashes. Broader quality, duration/device and product-surface gates stay open.
+
 ### Model documentation and issues #577/#579 — Codex (2026-11-07)
+
+- **CPU follow-up complete 2026-11-13:** issue #577 description and both comments reread. Actual Q8_0 / IQ4_NL decoder and encoder headers inspected with bounded ranges; the 48 3D expert banks hold 93.16% of decoder quantized matrix elements and have 1856/2688-wide rows, compatible with block-32 IQ4_NL but incompatible with block-256 K formats. A tiny CPU quantizer probe confirms that pre-fix released `q3_k` and `q4_k` both skip the 3D expert bank and use Q4_0 for a 2688-wide 2D matrix. The [follow-up](docs/issue-577-nemotron-triage.md#actual-gguf-layout-and-cpu-quantizer-follow-up-2026-11-13) records concrete layouts and remaining speech-pipeline work. Existing parser controls and two model-free layout tests pass. No full 30B weights, GPU/CI jobs or backend changes.
 
 - Source `0c39103756be95576202985e9972479648b4b5c9`. First document shipped Haas-ja usage and the actual Ultra/RE-USE support boundaries against the registry and runtime. Then review draft PR #580 and continue the pinned Ultra local-head and RE-USE work with unit and original-model parity tests; assess Nemotron 3.5 30B conversion, resource and Q3/Q4 quality feasibility. Preserve the #568 Metal CPU fallback and defer physical Metal work as requested.
 
@@ -102,10 +197,12 @@ Each lane gives the start state, the exact steps, the acceptance and what to do 
   3. Fix it in ggml-metal or in the graph.
 - **Accept:** Metal stems match CPU (vocals RMS within 1 %; SDR on the reporter's synthetic band within 0.5 dB of CPU) for F16/Q8_0/Q4_K. Then remove the CPU fallback, keep the env var as a kill switch, and close #568.
 
-### Lane S1 — SCNet follow-ups (status 2026-11-07)
+### Lane S1 — SCNet follow-ups (status 2026-11-13)
+
+**Measurement complete 2026-11-13:** offline Kaggle CPU kernel `crispasr-scnet-cache-cpu` version 4 succeeds using the released v0.8.53 CPU CLI (SCNet source matches `8d3b6aa39`) and real small F16 model. A deterministic 60-second stereo chirp, default 20-second segments / one shift / seed 0, produces all four finite stereo stems of 2,646,000 frames at 44.1 kHz. Versions 1/2 stopped before inference on Kaggle's archive-expansion layout; version 3 completed all six forwards but could not write the missing output directory. Both runner issues are fixed and covered by model-free tests. No numerical change, CI dispatch, or GPU job. Runnable source: `tools/kaggle/scnet-cache-cpu/`.
 
 SCNet is on main (v0.8.50+). Review findings from PR #566:
-1. **Open — graph cache hit rate.** The random per-chunk shift prefix changes the frame count, so the cached graph probably misses on most chunks. Measure it with an actual model (log cache hits in `src/scnet.cpp` graph reuse over a 60 s file). If it misses, bucket the shape (pad the prefix to a fixed frame count). Any numeric change requires a re-run of `scnet-qualification.yml`.
+1. **Measured — graph metadata cache hit rate is 1/6 (16.67%).** Actual frames are `872,872,884,876,868,438`, with hits `0,1,0,0,0,0`. The single CPU scheduler persists; its allocation pool grows from 475,103,872 to 481,567,552 bytes at 884 frames, then retains the same buffer address and capacity through the remaining metadata misses. A metadata miss does not imply a fresh allocation pool. Shape bucketing remains a possible performance experiment, not an established fix: this profiling run establishes neither a throughput benefit nor waveform equivalence for changing padding. No numeric change was made. Any future numeric change requires fresh qualification.
 2. **Fixed and verified** (qualification 42371575575 runs real-model 0.01 s and 100-sample-tail controls). `forward()` no longer aborts on inputs too short for the reflective STFT pad; it zero-extends to `FFT/2+1` samples and trims. Only inputs that previously threw take this path, so qualified results are unchanged. **To verify:** run the CLI `--separate` with an SCNet model on a 0.01 s stereo file, and on a file whose final segment is shorter than 2048 samples (with `--shifts 0`). Both must succeed with finite stems of the input length.
 3. **Not applicable.** The server always interleaves to 2 channels before `scnet_separate`, so the ">2 channels → 500" path cannot occur.
 4. **Won't fix here.** `crispasr_set_gpu_device_pref` is process-wide by design for every backend (Mini-BS-RoFormer does the same). Changing it is a codebase-wide refactor, not an SCNet bug.
