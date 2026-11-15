@@ -35,6 +35,11 @@ function(crispasr_discover_ab_tests target labels)
         PROPERTIES LABELS "bench" ENVIRONMENT "CRISPASR_RUN_PERF=1")
 endfunction()
 
+# Production RNNoise orchestration with link stubs; no model or library build.
+add_executable(test-rnnoise-bounds test-rnnoise-bounds.cpp)
+add_test(NAME test-rnnoise-bounds COMMAND test-rnnoise-bounds)
+set_tests_properties(test-rnnoise-bounds PROPERTIES LABELS "unit;enhance")
+
 add_executable(test-realtime-turn-buffer test-realtime-turn-buffer.cpp)
 target_include_directories(test-realtime-turn-buffer PRIVATE ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(test-realtime-turn-buffer PRIVATE Catch2::Catch2WithMain)
@@ -2621,9 +2626,10 @@ catch_discover_tests(test-tada-params
 )
 
 # ─── test-vibevoice-params — Catch2 unit tests for vibevoice_context_params defaults
-# and null-guard coverage. No GGUF required. ───────────────────────────────────
+# and task-capability coverage. Tiny generated GGUFs; no model required. ───────
 add_executable(test-vibevoice-params
     test-vibevoice-params.cpp
+    test-vibevoice-asr-capability.cpp
 )
 target_include_directories(test-vibevoice-params PRIVATE
     ${PROJECT_SOURCE_DIR}/src
@@ -5721,6 +5727,12 @@ set_tests_properties(test-package-lib-bundle PROPERTIES
 # Discover Python before constructing commands or guarding their registration.
 # A later find_package leaves clean builds without the guarded unit tests.
 find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_Interpreter_FOUND)
+    add_test(NAME test-vibevoice-converter-task
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_vibevoice_converter_task.py)
+    set_tests_properties(test-vibevoice-converter-task PROPERTIES LABELS "unit;vibevoice")
+endif()
+
 
 if (Python3_Interpreter_FOUND)
     add_test(NAME mini-bs-roformer-converter
@@ -6017,6 +6029,10 @@ if(UNIX AND Python3_EXECUTABLE)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_whisper_vad_timeline.py
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
     set_tests_properties(test-whisper-vad-timeline PROPERTIES LABELS "unit;whisper" TIMEOUT 60)
+    add_test(NAME test-python-speaker-primitives
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_speaker_primitives.py
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    set_tests_properties(test-python-speaker-primitives PROPERTIES LABELS "unit;bindings;speaker" TIMEOUT 60)
     add_test(NAME test-python-legacy-pointer
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python_legacy_pointer.py
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
@@ -6900,6 +6916,28 @@ if(Python3_Interpreter_FOUND AND CRISPASR_BUILD_EXAMPLES)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-quantizer-reporting.py
             $<TARGET_FILE:crispasr-quantize>)
     set_tests_properties(test-quantizer-reporting PROPERTIES
+        LABELS "unit;gh;quantization"
+        TIMEOUT 120)
+
+    add_test(NAME test-quantizer-streaming
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-quantizer-streaming.py
+            $<TARGET_FILE:crispasr-quantize>)
+    set_tests_properties(test-quantizer-streaming PROPERTIES
+        LABELS "unit;gh;quantization"
+        TIMEOUT 180)
+
+    # Real /dev/full plus deterministic stdio failures in the production CLI.
+    # Interposition is Linux-specific; the real device check skips elsewhere.
+    set(quantizer_io_fault_args)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_library(quantizer-io-faults SHARED quantizer-io-faults.c)
+        target_link_libraries(quantizer-io-faults PRIVATE ${CMAKE_DL_LIBS})
+        list(APPEND quantizer_io_fault_args $<TARGET_FILE:quantizer-io-faults>)
+    endif()
+    add_test(NAME test-quantizer-io
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-quantizer-io.py
+            $<TARGET_FILE:crispasr-quantize> ${quantizer_io_fault_args})
+    set_tests_properties(test-quantizer-io PROPERTIES
         LABELS "unit;gh;quantization"
         TIMEOUT 120)
 endif()

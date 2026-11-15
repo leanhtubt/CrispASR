@@ -1,3 +1,21 @@
+### VibeVoice release task guard — locally checked Codex (2026-11-14)
+
+- Base `6ac6a1848`; isolated `fix/v0854-vibevoice-task-guard`. Split checkpoint
+  task detection, converter task metadata and model-free tests from draft PR
+  #590 at `dc49a24`. Base/realtime TTS encoders no longer grant transcription;
+  legacy/current/streaming ASR retains capability. ASR synthesis now reports an
+  explicit task error before CLI/server voice lookup or native decoder checks.
+- The exact pre-change production source fails both the legacy-TTS capability
+  control and ASR synthesis diagnostic controls. The exact changed production
+  source passes all 70 assertions in 13 focused cases, including existing
+  parameter/null guards, streaming-ASR metadata and synthesis-checkpoint
+  non-rejection. Five weight-free converter tests and adapter syntax compilation
+  pass. The session C ABI calls the guarded native entry points directly; no
+  full session-library build was run. clang-format 18 and whitespace checks pass.
+- Broader TTS runtime, cloning, tokenizer, generation-budget and semantic changes
+  remain on the draft. No model/full-library build, GPU, hosted job, push,
+  version bump or model-quality acceptance is part of this split.
+
 # CrispASR — Current work plan
 
 Updated 2026-11-07. Start with [the maintainer handoff](docs/maintenance-handoff.md).
@@ -11,6 +29,98 @@ before starting. The full scope of each task (exact runs, inputs, commands and
 acceptance) is in [the handoff, "Open tasks"](docs/maintenance-handoff.md#open-tasks--fully-scoped).
 
 ## NOW — open lanes, fully scoped (2026-11-03)
+
+### Ultra local-head Dart binding — complete Codex (2026-11-13)
+
+- Base `8b7d95403`; isolated `feat/ultra-dart-20261113`. Added the missing
+  experimental local-head API with owned UTF-8 text and double-second timings.
+  Three native-recorder tests first failed on the absent API; all 44 Dart FFI
+  tests now pass through the strict runner and the existing production CTest
+  registration in an isolated configuration. Controls cover exact arguments,
+  fractional timing, the 120-second limit, int32 thread bounds, empty/null/invalid
+  results, malformed UTF-8 cleanup and partial older-library symbols before native
+  dispatch. Arena/finally releases inputs and native results on all paths.
+  Dart analysis, Dart format, clang-format 18 and whitespace checks pass. An initial
+  analyzer run was slow on shared storage; a local analyzer cache completes the
+  strict contract in 11 seconds. No model, full-library build, GPU, push or hosted
+  dispatch; broader model quality remains unqualified.
+
+### Python SpeakerDB float32 threshold parity — complete Codex (2026-11-13)
+
+- Base `c695da8a0`; isolated `fix/speaker-threshold-float32`. Match now normalizes
+  thresholds to the native float32 precision before validation and score
+  comparison. Two native boundary matches first failed because Python compared
+  against an unrounded double; finite `+/-1e100` also first failed pre-dispatch
+  rejection. Native-recorder controls cover both boundaries, scores one float32
+  step below threshold, overflow/nonfinite rejection without native dispatch,
+  and the largest finite float32 threshold. Both speaker suites pass (18 tests),
+  including existing close-during-coercion guards; the related wrapper suite
+  passes 19 tests with one optional full-library test skipped. All three exact
+  production CTest registrations pass in an isolated CMake configuration.
+  clang-format 18, Python compilation and whitespace checks pass. No model,
+  full-library build, GPU, push or hosted dispatch; speaker quality was not tested.
+
+### Python speaker-vector transport bounds — complete Codex (2026-11-13)
+
+- Base `c8388400e`; isolated `fix/product-guards-20261113`. TitaNet, SpeakerDB match/enroll and clustering now validate shape and native int32 counts before dtype conversion or contiguous copying. Twelve oversized float32/float64 virtual-view controls first failed against the prior wrappers without allocating large buffers. Both complete native-recorder suites pass (16 tests), including no native dispatch for oversized views, invalid shapes and valid strided/reversed transport. Clustering rejects nonzero rows with zero-dimensional embeddings while preserving zero-row results; both dtype controls first failed before the fix. TitaNet and SpeakerDB recheck lifetime after caller-controlled coercion; five close-during-conversion probes cover all three embedding operations plus threshold conversion and enrollment-name encoding without native dispatch. The related wrapper suite passes 19 tests with one optional full-library test skipped. Existing CI executes both speaker suites; the generic speaker suite is now also registered in CTest. All three production registrations pass in an isolated CMake configuration. clang-format 18, Python compilation and whitespace checks pass. No model, full-library build, GPU, push or hosted dispatch; speaker quality was not tested.
+
+### PCM16 extensible reference WAV — complete Codex (2026-11-13)
+
+- Base `1bf2db151`; isolated `fix/product-small-20261113`. Shared voice-reference
+  WAV parsing now accepts Windows extensible PCM16 with bounded cbSize, exact
+  PCM subtype GUID, valid-bit/container and block-alignment validation. Three
+  valid controls first failed against the old header. The production-header
+  Catch2 suite passes 158 assertions under ASan/UBSan and optimized builds,
+  covering exact mono/stereo/three-channel samples, odd metadata and extended
+  format padding, plus malformed/unsupported format rejection. All five tests
+  pass through the existing production CTest registration in an isolated
+  configuration. clang-format 18 and whitespace checks pass. No model,
+  full-library build, GPU, push or hosted dispatch; model speech quality was
+  not tested.
+
+### Ruby microphone cancellation stall — complete Codex (2026-11-13)
+
+- Base `08446098a`; isolated `diag/ruby-mic-close-20261113`. Full-contract repetition reproduced the stall; Ruby/native thread stacks located it at pump cancellation inside a callback, rather than concurrent close. `rb_protect` swallowed `Thread.kill` along with callback exceptions, leaving the pump waiting for more audio. Pausing the callback with `Thread.stop` made the old wrapper stall on the first run. Exception-specific rescue now lets cancellation reach the existing cleanup. The complete native-recorder contract passes 387 assertions, including forced callback cancellation, idle-wait cancellation, ordinary/non-StandardError callback exceptions, callback/external/concurrent close, exactly-once native cleanup and no live chunks; 100 complete program repetitions pass using one tiny fixture. Both kill joins and the subprocess have timeouts. clang-format 18 and whitespace checks pass. No model, full build, GPU, push or hosted dispatch.
+
+### Ultra local-head Ruby binding — complete Codex (2026-11-13)
+
+- Base `309830a48`; isolated `feat/ultra-ruby-20261113`. Added the missing experimental Ruby local-head API with owned UTF-8 text, double-second boundaries and deterministic native cleanup, including Ruby exceptions during result conversion. The native-recorder contract first failed on the missing method; the full strict Ruby contract now passes 379 assertions, covering argument transport, fractional timing, output lifetime, null/empty/invalid-count results, injected conversion exceptions and invalid input. Existing CTest and strict binding runner discover these tests; context guards are synchronized. clang-format 18 and whitespace checks pass. No model, full-library build, GPU, push or hosted job; broader model quality remains unqualified.
+
+### RNNoise native input bounds — complete Codex (2026-11-13)
+
+- Native RNNoise now rejects inputs before allocation when resampling or padding counts cannot fit native frame and buffer limits. A production-source test passes 59 checks under ASan/UBSan and optimized builds, covering exact bounds, simulated 32-bit capacities and small successful inputs; no large buffers are allocated. Actual 32-bit and real-DSP validation were not run.
+
+### Python separation and denoising transport — complete Codex (2026-11-13)
+
+- Base `bd0ded624`; isolated `fix/next-product-20261113`. Stereo separation now validates frame counts before reshape, dtype or contiguity copies; shared mono transport also checks counts before dtype conversion, and RNNoise rejects non-mono input. Corrected Python/Go/Java/C# and public-header RNNoise documentation to its actual 16 kHz input/output contract. The prior separation guard first failed on an oversized virtual view. Three new native-probe tests cover strided/reversed PCM, owned output, errors and oversized float32/float64 views without large allocation. All 19 executable wrapper tests, eight resampling, six audio utility and seven auxiliary PCM tests pass; one optional full-library test skips. Existing CTest/CI discovers the tests. Shared fixture audio symbols are Python-macro-only and absent in the default compiled fixture; The full Java and Ruby wrapper contracts also pass against the shared fixture. Formatting and whitespace checks pass. No model/full build/GPU/hosted job or push. Native RNNoise large-input bounds are handled in the related lane above.
+
+### Standalone VAD binding timestamps — complete Codex (2026-11-13)
+
+- Go and Java now convert legacy native centiseconds to the seconds promised by their interfaces; native-fixture tests cover fractional times, result ownership, empty results and errors. Ruby preserves and documents its existing native-centisecond convention, with fixture coverage. Python VAD ownership and units are handled in the related Python lane. The full model-free Go/Rust wrapper contract passed: 55 Go probes, the Go high-level package compilation, 39 Rust probes and five Rust documentation tests. An earlier run stalled while using the Rust compiler cache; rerunning with `RUSTC_WRAPPER=` completed in 49 seconds.
+
+### Python standalone VAD result transport — complete Codex (2026-11-13)
+
+- Base `0962e73df`; isolated `fix/product-audio-next-20261113`. Legacy standalone VAD boundaries now convert native centiseconds to the documented seconds; dispatcher boundaries retain their existing seconds. Both wrappers use the shared mono transport guard and free returned spans through the exported library allocator on success, empty/error returns and Python conversion exceptions. Three new native-recorder tests first reproduced the 100x timestamp error and allocator mismatch; all six audio utility tests, eight resampling tests and seven auxiliary diarization/PCM tests pass, including reversed PCM, non-mono rejection, positive-count/null rejection and zero/null controls. Existing CTest/CI registrations run the new cases. Python compilation and whitespace checks pass. No model/GPU/full-library build, push or hosted jobs.
+
+### Python auxiliary PCM transport — complete Codex (2026-11-13)
+
+- Base `586eb2b94`; isolated `fix/product-audio-20261113`. Native recording probes reproduced incorrect logical samples from strided language-ID/diarization buffers. Both now use the shared mono transport helper; stereo channels must match in length. Public watermark wrappers also referenced an undefined loader; all three now load the normal library, preserve native loaded-model state, and support strided PCM with in-place embedding copyback and writable/shape validation. All seven focused tests pass, including negative strides, untouched neighboring samples and pre-dispatch rejection; the existing regression workflow executes them. The related Python suite passes 32 tests and 55 subtests, with one pre-existing optional real-GGUF/native-library test skipped. Native recorder tests skip explicitly without a Linux C compiler. Whitespace and Python compilation checks pass. No full-library/model build, GPU or hosted dispatch.
+
+### Quantizer bounded tensor streaming — complete Codex (2026-11-13)
+
+- Base `586eb2b94`; isolated `fix/product-next-20261113`. Newly supported MoE banks previously buffered whole source, F32 and output tensors. Conversion and quantization now stream complete rows with at most 1,048,576 elements per chunk (or one wider row); raw copies use 1 MiB. A 64 MiB synthetic bank now succeeds within startup mappings plus 32 MiB address-space headroom for quantization, F16 casting and copying; the prior executable fails all three controls. All five streaming tests pass, including 22 complete-GGUF byte comparisons against the prior executable across F32/F16/Q8 sources, importance matrices and pointwise convolution reshaping, three independent chunk-concatenation controls, partial final chunks and invalid empty layout rejection. All 14 reporting/input-preservation tests and six I/O tests pass, including 16 injected/device failures and three failures after a successful chunk. All three production CTest registrations pass in an isolated configuration. Formatting and whitespace checks pass. No full-library/model build, GPU, push or CI dispatch; actual 30B execution and speech quality remain unqualified.
+
+### Ultra local-head Java binding — complete Codex (2026-11-13)
+
+- Base `c63d07ce9`; isolated `feat/ultra-binding-next-20261113`. Added the missing experimental Java local-head wrapper with owned UTF-8 text, double-second boundaries and deterministic native cleanup. The new contract first failed on the missing API; all three native-stub execution tests now pass 56 checks across UTF-8 and legacy JNA default encodings, covering argument transport, precision, null/empty/invalid-count cleanup and invalid input. The full strict Java contract passes all seven tests (385 checks), including older-library compatibility and the alignment worker UTF-8 preflight. Existing CTest and strict binding runner discover the new tests. Whitespace checks pass; no model, GPU, full-library build or CI dispatch and no broader model-quality claim.
+
+### Polyphase resampler filter bounds — complete Codex (2026-11-13)
+
+- Base `c63d07ce9`; isolated `fix/audio-audit-20261113`. Two input samples at an extreme header rate reproduced signed filter-length overflow under UBSan; finite extreme beta also produced invalid output. Filter construction now checks wide lengths against a 16,777,216-tap (64 MiB) ceiling and validates filter parameters and Bessel normalization. All 84 focused assertions pass under ASan/UBSan, including standard/coprime rates through 384 kHz, malformed rates, cache recovery and equal-rate identity. Nine accepted-rate waveform comparisons are byte-identical (38,316 bytes), including 44117↔48000 and 383999↔384000 Hz. The default filter permits reduced rate factors through 599186. clang-format 18 and whitespace checks pass. No full-library/model build, GPU, CI dispatch or broader model-quality claim.
+
+### Quantizer output I/O failure propagation — complete Codex (2026-11-13)
+
+- Base `c63d07ce9`; isolated `fix/quant-write-20261113`. Output placeholder, tensor, padding, metadata rewrite, seek, flush and final-close failures now return nonzero before success reporting; input seek errors also propagate. Contexts and streams are released on every writer return. Five actual-CLI tests cover 13 previously failing error cases plus a successful interposer control using disposable GGUFs and `/dev/full`; all preserve input. All 14 existing quantizer tests and eight old/new successful-output byte comparisons pass against the focused production-source build. Linux fault injection is optional in the new CTest entry; the entry passes in a standalone CMake configuration, while a full project configure was not completed. clang-format 18 and whitespace checks pass. No failed-output deletion, full-library build, GPU or hosted dispatch.
 
 ### Ultra local-head C# binding — complete Codex (2026-11-13)
 
