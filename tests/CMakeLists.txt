@@ -1347,6 +1347,15 @@ catch_discover_tests(test-confucius4-tts-live
 )
 endif()
 
+# ─── test-zonos3-live — live tests for the ZONOS3-Mini TTS backend (#603)
+add_executable(test-zonos3-live test_zonos3_live.cpp)
+target_include_directories(test-zonos3-live PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/ggml/include)
+target_link_libraries(test-zonos3-live PRIVATE Catch2::Catch2WithMain zonos3_tts)
+catch_discover_tests(test-zonos3-live
+    TEST_SPEC "[zonos3]"
+    PROPERTIES LABELS "live;zonos3"
+    PROPERTIES SKIP_RETURN_CODE 4
+)
 # ─── test-miotts-live — live integration tests for MioTTS backend
 add_executable(test-miotts-live
     test_miotts_live.cpp
@@ -4622,6 +4631,25 @@ target_link_libraries(test_audioseal_cosine PRIVATE
     audioseal
 )
 
+# ─── test-sentence-end-abbrev — --split-on-punct keeps German ordinals /
+# abbreviations inside the subtitle line (shared '.' rule with TTS chunking and
+# live translation). Compiles crispasr_output.cpp directly; no model load.
+add_executable(test-sentence-end-abbrev
+    test-sentence-end-abbrev.cpp
+    ${PROJECT_SOURCE_DIR}/examples/cli/crispasr_output.cpp
+)
+target_include_directories(test-sentence-end-abbrev PRIVATE
+    ${PROJECT_SOURCE_DIR}/examples/cli
+    ${PROJECT_SOURCE_DIR}/src
+)
+target_link_libraries(test-sentence-end-abbrev PRIVATE
+    Catch2::Catch2WithMain
+)
+catch_discover_tests(test-sentence-end-abbrev
+    TEST_SPEC "[sentence-end]"
+    PROPERTIES LABELS "unit;output"
+)
+
 # ─── test_server_chunking — Catch2 unit tests for the sentence splitter
 #used by / v1 / audio / speech long - form input(PLAN §75d / issue #66).
 #Pure functions, no backend dependency.
@@ -4631,6 +4659,7 @@ add_executable(test_server_chunking
 )
 target_include_directories(test_server_chunking PRIVATE
     ${PROJECT_SOURCE_DIR}/examples/cli
+    ${PROJECT_SOURCE_DIR}/src
 )
 target_link_libraries(test_server_chunking PRIVATE
     Catch2::Catch2WithMain
