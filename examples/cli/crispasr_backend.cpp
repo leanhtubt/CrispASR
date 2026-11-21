@@ -65,6 +65,7 @@ std::unique_ptr<CrispasrBackend> crispasr_make_mimo_asr_backend();
 std::unique_ptr<CrispasrBackend> crispasr_make_htdemucs_backend();
 std::unique_ptr<CrispasrBackend> crispasr_make_mel_band_roformer_backend();
 std::unique_ptr<CrispasrBackend> crispasr_make_mini_bs_roformer_backend();
+std::unique_ptr<CrispasrBackend> crispasr_make_voice_isolator_backend();
 std::unique_ptr<CrispasrBackend> crispasr_make_scnet_backend();
 std::unique_ptr<CrispasrBackend> crispasr_make_crepe_backend();
 std::unique_ptr<CrispasrBackend> crispasr_make_btc_chords_backend();
@@ -182,9 +183,11 @@ std::unique_ptr<CrispasrBackend> crispasr_create_backend(const std::string& requ
         return crispasr_make_higgs_stt_backend();
     if (name == "qwen3" || name == "qwen3-1.7b" || name == "qwen3_1.7b" || name == "qwen3_17b" || name == "mega-asr" ||
         name == "mega_asr" || name == "megaasr" || name == "raon-speech" || name == "raon-speech-9b" ||
-        name == "raon_speech" || name == "rumble-2-flash" || name == "rumble2" || name == "rumble")
+        name == "raon_speech" || name == "rumble-2-flash" || name == "rumble2" || name == "rumble" ||
+        name == "confucius4-r2t2" || name == "confucius4_r2t2" || name == "r2t2")
         return crispasr_make_qwen3_backend(name == "qwen3" || name == "qwen3-1.7b" || name == "qwen3_1.7b" ||
-                                           name == "qwen3_17b");
+                                           name == "qwen3_17b" || name == "confucius4-r2t2" ||
+                                           name == "confucius4_r2t2" || name == "r2t2");
     if (name == "fastconformer-ctc" || name == "fastconformer_ctc" || name == "canary-ctc" || name == "canary_ctc")
         return crispasr_make_fastconformer_ctc_backend();
     if (name == "wav2vec2" || name == "hubert" || name == "data2vec")
@@ -304,6 +307,9 @@ std::unique_ptr<CrispasrBackend> crispasr_create_backend(const std::string& requ
         return crispasr_make_scnet_backend();
     if (name == "mini-bs-roformer" || name == "mini_bs_roformer" || name == "mini-bs-roformer-v2.5")
         return crispasr_make_mini_bs_roformer_backend();
+    if (name == "voice-isolator" || name == "voice_isolator" || name == "inworld-voice-isolator" ||
+        name == "voice-isolator-realtime")
+        return crispasr_make_voice_isolator_backend();
     if (name == "mel-band-roformer" || name == "mel_band_roformer" || name == "melbandroformer" || name == "mbr")
         return crispasr_make_mel_band_roformer_backend();
     if (name == "crepe" || name == "crepe-tiny" || name == "crepe-full" || name == "pitch")
@@ -534,6 +540,7 @@ std::vector<std::string> crispasr_list_backends() {
         "htdemucs",
         "mel-band-roformer",
         "mini-bs-roformer",
+        "voice-isolator",
         "scnet",
         "crepe",
         "btc-chords",
@@ -710,6 +717,24 @@ void crispasr_print_backend_matrix_json() {
 // Mappings are based on the value that each model's converter writes into
 // the GGUF file. When a converter doesn't write this key we fall back to
 // filename heuristics.
+// general.architecture -> backend via the shared table; "" when the file is not
+// GGUF, has no architecture key, or the architecture is unmapped.
+static std::string gguf_arch_backend(const std::string& model_path) {
+    struct gguf_init_params gip = {/*.no_alloc=*/true, /*.ctx=*/nullptr};
+    gguf_context* gctx = gguf_init_from_file(model_path.c_str(), gip);
+    if (!gctx)
+        return "";
+    std::string result;
+    const int key = gguf_find_key(gctx, "general.architecture");
+    if (key >= 0) {
+        const char* arch = gguf_get_val_str(gctx, key);
+        if (arch)
+            result = core_arch::backend_for_arch(arch);
+    }
+    gguf_free(gctx);
+    return result;
+}
+
 static std::string detect_backend_unchecked(const std::string& model_path) {
     if (model_path.empty())
         return "";
@@ -748,6 +773,8 @@ static std::string detect_backend_unchecked(const std::string& model_path) {
         return "scnet";
     if (contains_ci("mini-bs-roformer") || contains_ci("mini_bs_roformer"))
         return "mini-bs-roformer";
+    if (contains_ci("voice-isolator") || contains_ci("voice_isolator"))
+        return "voice-isolator";
     if (contains_ci("mel-band-roformer") || contains_ci("mel_band_roformer") || contains_ci("roformer"))
         return "mel-band-roformer";
     if (contains_ci("crepe"))
@@ -913,8 +940,15 @@ static std::string detect_backend_unchecked(const std::string& model_path) {
         return "dia";
     if (contains_ci("dia-tts") || contains_ci("dia_tts"))
         return "dia";
-    if (contains_ci("confucius4") || contains_ci("confucius4-tts") || contains_ci("confucius4_tts"))
-        return "confucius4-tts";
+    if (contains_ci("confucius4") || contains_ci("confucius4-tts") || contains_ci("confucius4_tts")) {
+        // "confucius4" names a family, not one architecture: Confucius4-R2T2
+        // (#445) is a Qwen3-ASR fine-tune (general.architecture=qwen3asr) that
+        // this name rule sent to the TTS backend (CI run 43170649072: exit 13,
+        // missing transformer.ln_f). A mapped GGUF architecture decides; the
+        // name only covers files without one.
+        const std::string by_arch = gguf_arch_backend(model_path);
+        return by_arch.empty() ? "confucius4-tts" : by_arch;
+    }
     if (contains_ci("dots-tts") || contains_ci("dots_tts") || contains_ci("dots.tts"))
         return "dots-tts";
     if (contains_ci("fireredtts3"))
@@ -972,20 +1006,7 @@ static std::string detect_backend_unchecked(const std::string& model_path) {
     // #335: the two used to be independent copies and had drifted by 113
     // architecture strings. The filename pass above hid that from CLI users
     // while every binding got a NULL session for the very same GGUF.
-    struct gguf_init_params gip = {/*.no_alloc=*/true, /*.ctx=*/nullptr};
-    gguf_context* gctx = gguf_init_from_file(model_path.c_str(), gip);
-    if (!gctx)
-        return "";
-
-    std::string result;
-    const int key = gguf_find_key(gctx, "general.architecture");
-    if (key >= 0) {
-        const char* arch = gguf_get_val_str(gctx, key);
-        if (arch)
-            result = core_arch::backend_for_arch(arch);
-    }
-    gguf_free(gctx);
-    return result;
+    return gguf_arch_backend(model_path);
 }
 
 std::string crispasr_detect_backend_from_gguf(const std::string& model_path) {

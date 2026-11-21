@@ -43,7 +43,7 @@ on:
 # manual runs get their own group (run_id), so they are never cancelled.
 # Literal `ci-yml` prefix: build.yml is also named "CI" (see its note).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-yml-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type != 'tag' && (github.event_name == 'push' || github.event_name == 'pull_request') }}
 jobs:
   # Path gate for the expensive legs below. Fail-open: dispatch, a new or
@@ -282,6 +282,11 @@ jobs:
 
       - name: Check production GPU backend/device selection without hardware
         run: python3 tests/test_gpu_backend_selection.py -v
+
+      # #568: string-named Metal kernels lost in a kernel-file split only fail
+      # on real Apple GPUs, which hosted runners do not have.
+      - name: Metal kernels named by host code exist
+        run: python3 tests/test_metal_kernel_names.py -v
 
       - name: CANN model validator false-success and archive controls
         run: python3 tests/test_cann_model_validator.py -v

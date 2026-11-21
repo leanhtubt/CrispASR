@@ -5,7 +5,7 @@
 #include "mini_bs_roformer.h"
 #include "mini_bs_roformer_bf16.h"
 #include "mini_bs_roformer_fft.h"
-#include "core/crispasr_env.h"
+#include "core/env_gate.h"
 #include "core/ggml_cpu_backend.h"
 #include "core/gguf_loader.h"
 #include "core/gpu_backend_pref.h"
@@ -800,14 +800,19 @@ mini_bs_roformer_context* mini_bs_roformer_init_from_file(const char* path, mini
                 ggml_backend_free(m->backend);
                 m->backend = nullptr;
             }
-            // #568: on Metal the separated stems lose most of the signal
-            // (vocals RMS 0 vs 0.154 on CPU). Until the Metal path is fixed and
-            // qualified, run on CPU; CRISPASR_MINI_BS_ROFORMER_METAL=1 opts back
-            // in for debugging.
+            // #568: a physical M1 produced near-silent vocals on Metal. Every
+            // linear() here tags GGML_PREC_F32, which routes small-batch Q8_0
+            // and Q4_K GEMMs to bespoke Metal kernels; those kernels were lost
+            // in the ggml kernel-file split (restored: Q8_0 in ggml 9b8305fb,
+            // Q4_K in 97098170; tests/test_metal_kernel_names.py guards it).
+            // Physical-M1 parity passed on 2026-11-20 for F16/Q8_0/Q4_K with
+            // both decoder paths (docs/mini-bs-roformer-validation.md), so
+            // Metal is the default again. CRISPASR_MINI_BS_ROFORMER_METAL=0
+            // (or false/off/no) is the kill switch that forces the CPU.
             const char* bn = m->backend ? ggml_backend_name(m->backend) : nullptr;
             const bool metal = bn && (std::strncmp(bn, "MTL", 3) == 0 || std::strncmp(bn, "Metal", 5) == 0);
-            if (metal && !crispasr_env::get("CRISPASR_MINI_BS_ROFORMER_METAL")) {
-                fprintf(stderr, "mini_bs_roformer: Metal output is not yet correct (#568); using CPU\n");
+            if (metal && core_env::explicitly_off("CRISPASR_MINI_BS_ROFORMER_METAL")) {
+                fprintf(stderr, "mini_bs_roformer: Metal disabled by CRISPASR_MINI_BS_ROFORMER_METAL; using CPU\n");
                 ggml_backend_free(m->backend);
                 m->backend = nullptr;
             }

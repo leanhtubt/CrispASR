@@ -1,3 +1,14 @@
+## 2026-11-20 — `--punc-model pcs` downloads the mixed-precision PCS file
+
+- **Change:** `pcs` now resolves to `pcs-xlmr-base-q4_k-mixed.gguf`, pinned to `cstr/pcs-xlmr-base-GGUF@a685c2ea` (SHA-256 `341c26b8…2839`, 167 MB). The file is Q4_K + imatrix with encoder layer 0 and the truecase head at Q8_0. The previous plain-Q4_K default stays selectable as `pcs-q4k`; the Q4_K + imatrix file is `pcs-q4k-imatrix`.
+- **Why:** both all-4-bit files lose a casing decision: "I'm OK" becomes "I'm ok" with plain Q4_K and "I'm oK" with Q4_K + imatrix. The mixed file matches the original model on CrispEmbed's PCS parity corpus: 67/67 on all four heads and 6/6 decoded lines exact. In an exact replay of the original graph, the `o` logit is +0.688; it is −0.238 for Q4_K + imatrix and +1.083 for F32. Selection and gate: CrispEmbed `docs/pcs-quality-root-cause.md` and `tests/results/pcs/mixed-q4-selection-20261120.json`.
+- **Tests:** `test_punc_resolve` covers the new default and both kept aliases. The Hub card now gives the correct upstream licence (Apache-2.0, not MIT) and every file's SHA-256.
+
+## 2026-11-20 — Mini-BS-RoFormer runs on Metal again (#568)
+
+- **Change:** the v0.8.50 CPU fallback on Metal is removed. `CRISPASR_MINI_BS_ROFORMER_METAL=0` (or `false`/`off`/`no`) forces the CPU as a kill switch; the old `=1` opt-in is now the default.
+- **Evidence:** physical Apple M1, main `c555668f`, ggml `97098170` (restored Q8_0/Q4_K PREC_F32 Metal kernels). F16/Q8_0/Q4_K × shared/per-stem decoder on speech plus a synthetic band: vocals RMS identical to CPU, vocals SDR within 0.02 dB, Metal-vs-CPU vocals SNR 63–84 dB. Details in `docs/mini-bs-roformer-validation.md`.
+
 ## 2026-11-19 — ZONOS3-Mini TTS backend (#603)
 
 - **Backend:** `--backend zonos3` runs Zyphra/ZONOS3-Mini. The 11-layer hybrid has 9 Gated DeltaNet and 2 global GQA layers, Full AttnRes and a latent 64-expert top-2 MoE. It emits 10x4096 delayed codes at 15 Hz, decoded by the mossdual iSTFT codec at 44.1 kHz. The backend loads Zyphra's GGUFs unchanged (`backbone-ptq.gguf`: Q4_0 experts and Q8_0 mixer, Apache-2.0; `zac-keep2.gguf`), so there is no converter and no cstr/ upload. `src/zonos3/` is vendored from Zyphra's MIT ggml server at a50e141, trimmed only where our ggml lacks upstream's Metal `conv_1d_implicit` patch (encoder-only path).

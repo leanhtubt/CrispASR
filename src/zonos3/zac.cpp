@@ -12,7 +12,7 @@
 #include "compat.h"
 #include "backend-device.h"
 #include "ggml-alloc.h"
-#include "ggml-cpu.h"
+#include "core/ggml_cpu_backend.h" // CrispASR: GGML_BACKEND_DL-safe CPU calls
 #include "gguf.h"
 
 #include <algorithm>
@@ -62,7 +62,7 @@ static bool zac_init_backend(zac_model& m, ggml_backend_dev_t dev) {
     if (!m.is_gpu) {
         const char* th = getenv("ZAC_THREADS");
         if (th)
-            ggml_backend_cpu_set_n_threads(m.backend, std::max(1, atoi(th)));
+            core_cpu_backend::set_n_threads(m.backend, std::max(1, atoi(th)));
         // The decoder convs are large f32 GEMMs; ggml's CPU kernels run them ~4x slower than
         // a BLAS backend such as Accelerate. Offload them when one is built in.
         if (ggml_backend_dev_t accel = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_ACCEL)) {
@@ -314,7 +314,7 @@ bool zac_load(zac_model& m, const char* path, bool use_gpu) {
         }
         const int64_t n = ggml_nelements(l.src);
         if (l.kind == HOST) {
-            const float* hp = (const float*)tmp.data();
+            const float* hp = (const float*)(const void*)tmp.data();
             const std::string nm = name;
             if (nm == "resample.kernel")
                 m.rs_kernel.assign(hp, hp + n);
@@ -335,10 +335,10 @@ bool zac_load(zac_model& m, const char* path, bool use_gpu) {
             ggml_backend_tensor_set(l.dst, rep.data(), 0, (size_t)n * sizeof(float));
         } else if (l.kind == MAT) {
             half.resize((size_t)n);
-            ggml_fp32_to_fp16_row((const float*)tmp.data(), half.data(), n);
+            ggml_fp32_to_fp16_row((const float*)(const void*)tmp.data(), half.data(), n);
             ggml_backend_tensor_set(l.dst, half.data(), 0, (size_t)n * sizeof(ggml_fp16_t));
         } else {
-            const float* src = (const float*)tmp.data();
+            const float* src = (const float*)(const void*)tmp.data();
             rep.resize((size_t)n);
             if (l.kind == DW) {
                 const int64_t K = l.src->ne[0], C = l.src->ne[1];
@@ -355,7 +355,7 @@ bool zac_load(zac_model& m, const char* path, bool use_gpu) {
             }
         }
         if (std::string(name) == "res.bias")
-            m.res_bias.assign((const float*)tmp.data(), (const float*)tmp.data() + n);
+            m.res_bias.assign((const float*)(const void*)tmp.data(), (const float*)(const void*)tmp.data() + n);
         m.t[name] = l.dst;
     }
     fclose(f);

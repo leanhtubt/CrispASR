@@ -519,6 +519,40 @@ catch_discover_tests(test-audio-resample
     PROPERTIES LABELS "unit"
 )
 
+# ─── test-ctc-punct-space — NeMo space-before-punctuation decode step (unit) ───
+add_executable(test-ctc-punct-space
+    test-ctc-punct-space.cpp
+)
+target_include_directories(test-ctc-punct-space PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+target_link_libraries(test-ctc-punct-space PRIVATE
+    Catch2::Catch2WithMain
+)
+catch_discover_tests(test-ctc-punct-space
+    TEST_SPEC "[ctc-punct]"
+    PROPERTIES
+        LABELS unit
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+)
+
+# ─── test-bert-pretok-spacing — pretokenize whitespace flags (fireredpunc) ───
+add_executable(test-bert-pretok-spacing
+    test-bert-pretok-spacing.cpp
+)
+target_include_directories(test-bert-pretok-spacing PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+target_link_libraries(test-bert-pretok-spacing PRIVATE
+    Catch2::Catch2WithMain
+)
+catch_discover_tests(test-bert-pretok-spacing
+    TEST_SPEC "[pretokenize]"
+    PROPERTIES
+        LABELS unit
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+)
+
 # ─── test-voxtral-pretokenize — the tekken regex split (#338 follow-up) ───────
 # Header-only, no weights, no network: expectations are generated from the
 # published `config.pattern` via Python's `regex`, so this pins the SPLIT
@@ -4925,6 +4959,15 @@ target_link_libraries(test-align-ab-bench PRIVATE
 crispasr_discover_ab_tests(test-align-ab-bench "align")
 
 # ─── test-conformer-ab-bench — conformer_ibm.h paired A/B speed and parity bench ────
+# Same cause as #421 (see the hift-simdconv note above): the test compares the
+# baseline and accelerated shaw_block_attention loops for bit-identity, and with
+# contraction on, clang 14 / gcc -march=native on arm64 fuse their multiply-adds
+# differently once one loop vectorises (CI ubuntu-22.04-arm: 19.3% identical;
+# -ffp-contract=off restores 100% on every compiler/flag combo). Pin contraction
+# off for this test TU only; shipped kernels keep fmadd.
+if (NOT MSVC)
+    set_source_files_properties(test-conformer-ab-bench.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+endif()
 add_executable(test-conformer-ab-bench test-conformer-ab-bench.cpp)
 target_include_directories(test-conformer-ab-bench PRIVATE
     ${PROJECT_SOURCE_DIR}/src
@@ -5408,6 +5451,33 @@ if(APPLE AND TARGET ggml-metal)
     endforeach()
 endif()
 
+# ─── CUDA SSM convolution capability and CPU fallback (#598) ──────────────
+# CUDA SSM capability is also exercised on CPU-only CI through an emulated
+# device and the real scheduler. A CUDA build additionally tests the real device.
+if(NOT GGML_BACKEND_DL)
+    add_executable(test-ssm-conv-fallback test-ssm-conv-fallback.cpp)
+    target_include_directories(test-ssm-conv-fallback PRIVATE ${PROJECT_SOURCE_DIR}/ggml/src)
+    target_link_libraries(test-ssm-conv-fallback PRIVATE ggml ggml-base crispasr_link_ggml_cpu)
+    add_test(NAME ssm-conv-fallback COMMAND test-ssm-conv-fallback)
+    add_test(NAME ssm-conv-legacy-rejected COMMAND test-ssm-conv-fallback --legacy-support)
+    set_tests_properties(ssm-conv-fallback ssm-conv-legacy-rejected PROPERTIES LABELS "unit;ggml;backend" TIMEOUT 45)
+    set_tests_properties(ssm-conv-legacy-rejected PROPERTIES WILL_FAIL TRUE)
+    if(TARGET ggml-cuda)
+        add_executable(test-ssm-conv-cuda test-ssm-conv-fallback.cpp)
+        target_include_directories(test-ssm-conv-cuda PRIVATE ${PROJECT_SOURCE_DIR}/ggml/src)
+        target_compile_definitions(test-ssm-conv-cuda PRIVATE CRISPASR_TEST_REAL_CUDA)
+        target_link_libraries(test-ssm-conv-cuda PRIVATE ggml ggml-base crispasr_link_ggml_cpu ggml-cuda)
+        add_test(NAME ssm-conv-cuda COMMAND test-ssm-conv-cuda)
+        set_tests_properties(ssm-conv-cuda PROPERTIES LABELS "unit;ggml;backend;cuda" TIMEOUT 60 SKIP_RETURN_CODE 4)
+        add_executable(test-xasr-cuda-live test-xasr-cuda-live.cpp)
+        target_include_directories(test-xasr-cuda-live PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/include)
+        target_link_libraries(test-xasr-cuda-live PRIVATE crispasr-lib ggml-cuda)
+        add_test(NAME xasr-cuda-live COMMAND test-xasr-cuda-live)
+        set_tests_properties(xasr-cuda-live PROPERTIES LABELS "live;cuda;xasr" TIMEOUT 300 SKIP_RETURN_CODE 4
+            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+    endif()
+endif()
+
 # ─── test_ggml_audio_ops_backend — carried ggml audio-op backend patches ─────
 #
 # These run conv_transpose_1d and col2im_1d directly on a single GPU backend
@@ -5799,6 +5869,12 @@ if (Python3_Interpreter_FOUND)
     add_test(NAME mini-bs-roformer-reference-streaming
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-mini-bs-reference-streaming.py -v)
     set_tests_properties(mini-bs-roformer-reference-streaming PROPERTIES LABELS "unit;mini-bs-roformer" TIMEOUT 60)
+endif()
+
+if (Python3_Interpreter_FOUND)
+    add_test(NAME voice-isolator-converter
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test-voice-isolator-converter.py -v)
+    set_tests_properties(voice-isolator-converter PROPERTIES LABELS "unit;voice-isolator" TIMEOUT 60)
 endif()
 
 if (CRISPASR_BUILD_EXAMPLES AND Python3_Interpreter_FOUND)
@@ -7076,6 +7152,15 @@ if(Python3_EXECUTABLE AND CRISPASR_BUILD_EXAMPLES)
     endforeach()
 endif()
 if(Python3_EXECUTABLE)
+    add_test(NAME sanitized-python-launch-controls
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/test_sanitized_python_launch.py -v)
+    set_tests_properties(sanitized-python-launch-controls PROPERTIES LABELS "unit;ci" TIMEOUT 90)
+    add_test(NAME ci-run-status-controls
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/test_ci_run_status.py -v)
+    set_tests_properties(ci-run-status-controls PROPERTIES LABELS "unit;ci" TIMEOUT 30)
+    add_test(NAME ssm-conv-cuda-contract
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/test_ssm_conv_cuda_contract.py -v)
+    set_tests_properties(ssm-conv-cuda-contract PROPERTIES LABELS "unit;ggml;backend")
     add_test(NAME vibevoice-clone-live-controls
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_vibevoice_clone_live_controls.py)
     set_tests_properties(vibevoice-clone-live-controls PROPERTIES LABELS "unit;vibevoice;voice-cloning")
@@ -7102,3 +7187,7 @@ endif()
 add_executable(vibevoice-negative-history-probe EXCLUDE_FROM_ALL vibevoice-negative-history-probe.cpp)
 target_include_directories(vibevoice-negative-history-probe PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(vibevoice-negative-history-probe PRIVATE crispasr-core ggml ggml-base crispasr_link_ggml_cpu Threads::Threads)
+
+include(${PROJECT_SOURCE_DIR}/cmake/SanitizedPythonTests.cmake)
+crispasr_preload_asan_for_python_tests(
+    gguf-detector-metadata haas-dispatch-entrypoints test-quantizer-io)

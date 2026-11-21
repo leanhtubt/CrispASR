@@ -449,3 +449,61 @@ input. It does not establish that the original physical M1 configuration is
 fixed, nor does a single Q8 speech input meet the F16/Q8/Q4 and synthetic-band
 accuracy gates. Keep the default CPU fallback until those gates pass on the
 relevant hardware; retain the original issue for the unresolved cases.
+
+## Issue #568: missing Metal kernels and hosted-runner limits (2026-11-20)
+
+The hosted `macos-15` GPU is an `Apple Paravirtual device`, family Apple5, with
+no SIMD-group reduction or matrix multiply. ggml-metal therefore declines every
+MUL_MAT, RMS norm, softmax and flash-attention op there, and the scheduler runs
+them on the CPU. Matching CPU/"Metal" results on hosted runners (all 25 stages
+for F16 and Q8_0; chunked 14.6 s separation for F16, Q8_0 and Q4_K; the source
+and ggml pins of the reporter's build) say nothing about the kernels a physical
+M-series Mac runs.
+
+On a physical Mac, each `linear()` tags `GGML_PREC_F32`. ggml-metal sends
+small-batch PREC_F32 Q8_0 and Q4_K GEMMs to bespoke kernels looked up by name.
+When the fork split `ggml-metal.metal` into `kernels/*.metal`, those kernels
+were dropped. The Q8_0 pair came back in ggml `9b8305fb`, and the Q4_K pair
+(`kernel_quantize_q8_K_f32`, `kernel_mul_mv_q4_K_q8_K`) in `97098170`. The
+restored kernels compile with `xcrun metal` and in the embedded library.
+`tests/test_metal_kernel_names.py` runs in Linux CI and fails on any kernel
+the host code names but no `.metal` file defines. It includes a positive
+control. The default CPU fallback stays until the physical-Mac gates in
+PLAN.md lane M1 pass.
+
+
+## Issue #568: physical Apple M1 acceptance (2026-11-20)
+
+Run on a physical Apple M1 (`MTL0`), macOS 26, at main `c555668f` with ggml
+`97098170`, using the registry GGUFs (unchanged on Hugging Face since
+2026-11-01, so the same files as the report). Metal was opted in with
+`CRISPASR_MINI_BS_ROFORMER_METAL=1`. The CPU arm used `--no-gpu -t 4`. Each
+configuration ran as its own process.
+
+**Input.** 14.5 s of macOS `say` speech (stereo, 44.1 kHz, RMS 0.1154), mixed
+with a synthetic band: a 55 Hz bass line, a pitch-swept kick, noise hi-hats and
+a C-major pad (mix RMS 0.1446). The speech track is the known vocals stem. This
+is a band built for this check, not the reporter's own synthetic band.
+
+| Model / decoder | Vocals RMS, Metal = CPU | Vocals SDR vs speech, Metal / CPU | Metal-vs-CPU SNR, vocals / bass / drums / other |
+|---|---|---|---|
+| F16, shared-affine | 0.1154 | 21.94 / 21.94 dB | 84.2 / 80.7 / 58.7 / 70.4 dB |
+| F16, per-stem | 0.1154 | 21.94 / 21.94 dB | 84.2 / 80.7 / 58.7 / 70.4 dB |
+| Q8_0, shared-affine | 0.1154 | 21.94 / 21.94 dB | 84.1 / 80.3 / 56.1 / 63.1 dB |
+| Q8_0, per-stem | 0.1154 | 21.94 / 21.94 dB | 84.1 / 80.3 / 56.1 / 63.1 dB |
+| Q4_K, shared-affine | 0.1154 | 21.74 / 21.72 dB | 62.9 / 58.9 / 27.3 / 14.3 dB |
+| Q4_K, per-stem | 0.1154 | 21.74 / 21.72 dB | 62.9 / 58.9 / 27.3 / 14.3 dB |
+
+The lower Q4_K drums/other figures sit on near-empty stems (RMS 0.0011 and
+<0.0001). `CRISPASR_MINI_BS_SHARED_DECODER=0` produced the `decoder=per-stem`
+log line of the original report, and its WAVs differ byte-wise from the shared
+path, so both decoder paths ran. On the speech-only clip, Metal and CPU stems
+differ by at most 2 LSB (Q8_0 and Q4_K).
+
+Both PLAN.md lane M1 gates pass: vocals RMS within 1 % (identical to four
+decimals) and vocals SDR within 0.5 dB of CPU (≤0.02 dB). The default CPU
+fallback is removed. `CRISPASR_MINI_BS_ROFORMER_METAL=0` (or `false`, `off`,
+`no`) still forces the CPU, and was checked to reproduce the CPU stems byte for
+byte. The original silent-vocals result was not reproduced on current main.
+Its build `830ca6024` is not in the published history, so the exact cause at
+that build is not established.

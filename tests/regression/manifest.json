@@ -1250,8 +1250,6 @@
       "backend_id": "qwen3",
       "gguf": {"repo": "cstr/confucius4-r2t2-GGUF", "revision": "6a9aa41833f577a7a2f5d0a2ed61d8250c0c57b4", "file": "confucius4-r2t2-q4_k.gguf", "approx_size_mb": 1491},
       "skip_diff": true,
-      "cli_extra_args": ["--backend", "qwen3"],
-      "_backend_note": "Without --backend the CLI auto-detects this Qwen3-ASR GGUF as confucius4-tts (name-prefix match) and fails to init (exit 13, missing transformer.ln_f; CI run 43170649072). Pinned explicitly here; the misroute itself is an open CLI finding.",
       "sample": "samples/jfk.wav",
       "expected_transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
       "expected_transcript_source": "Human transcript of samples/jfk.wav (JFK inaugural address), not a model capture.",
@@ -1274,6 +1272,40 @@
       "skip_diff": true,
       "cli_extra_args": ["--backend", "qwen3"],
       "_validation_note": "#602 Reson8/Rumble-2-Flash. Stage-diffed vs fp32 transformers by tools/ci-heavy/rumble2_validate.py (heavy-cpu run 44490348922): F16 cos 1.000000 at every stage; f16/q8_0/q4_k transcripts byte-identical to transformers on jfk/ko-369/paraformer_zh.",
+      "sample": "samples/jfk.wav",
+      "expected_transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
+      "expected_transcript_source": "Human transcript of samples/jfk.wav (JFK inaugural address), not a model capture.",
+      "transcript_tolerance": {"cer_max": 0.1, "wer_max": 0.1}
+    },
+    {
+      "name": "fluid-speech-pro-q8_0",
+      "backend_id": "parakeet",
+      "gguf": {"repo": "cstr/fluid-speech-pro-GGUF", "revision": "7318433d936a85d496c9204cc5a7aeb5c3021476", "file": "fluid-speech-pro-q8_0.gguf", "approx_size_mb": 677},
+      "skip_diff": true,
+      "_validation_note": "#595 FluidVoice-Labs/fluid-speech-pro (parakeet-tdt-0.6b-v3 + encoder.fv_insert FrameCleaner). tools/ci-heavy/fluid_speech_validate.py (heavy-cpu run 44600046468): F16 28/28 NeMo stages PASS on jfk + multispeaker; F16/Q8_0 transcripts equal NeMo.",
+      "sample": "samples/jfk.wav",
+      "expected_transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
+      "expected_transcript_source": "Human transcript of samples/jfk.wav (JFK inaugural address), not a model capture.",
+      "transcript_tolerance": {"cer_max": 0.1, "wer_max": 0.1}
+    },
+    {
+      "name": "fluid-speech-pro-clean-q8_0",
+      "backend_id": "parakeet",
+      "gguf": {"repo": "cstr/fluid-speech-pro-GGUF", "revision": "7318433d936a85d496c9204cc5a7aeb5c3021476", "file": "fluid-speech-pro-clean-q8_0.gguf", "approx_size_mb": 677},
+      "skip_diff": true,
+      "_validation_note": "#595 FluidVoice-Labs/fluid-speech-pro clean mode folded at conversion (parakeet-tdt-0.6b-v3 + encoder.fv_insert FrameCleaner). tools/ci-heavy/fluid_speech_validate.py (heavy-cpu run 44600046468): F16 28/28 NeMo stages PASS on jfk + multispeaker; F16/Q8_0 transcripts equal NeMo.",
+      "sample": "samples/jfk.wav",
+      "expected_transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
+      "expected_transcript_source": "Human transcript of samples/jfk.wav (JFK inaugural address), not a model capture.",
+      "transcript_tolerance": {"cer_max": 0.1, "wer_max": 0.1}
+    },
+    {
+      "name": "musci-asr-qwen-1019-q4_k",
+      "backend_id": "qwen3",
+      "gguf": {"repo": "cstr/musci-asr-qwen-1019-GGUF", "revision": "b6b266e1b268b6ed1234eacd585f8ea4dc50508f", "file": "musci-asr-qwen-1019-q4_k.gguf", "approx_size_mb": 1491},
+      "skip_diff": true,
+      "cli_extra_args": ["--backend", "qwen3"],
+      "_validation_note": "#595 Musci-research/Musci-ASR-qwen-1019 (Qwen3-ASR-1.7B GRPO fine-tune). tools/ci-heavy/musci_validate.py (heavy-cpu run 44600040132): F16 cos 1.000000 at every stage on jfk + paraformer_zh; f16/q8_0/q4_k transcripts equal fp32 qwen_asr.",
       "sample": "samples/jfk.wav",
       "expected_transcript": "And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.",
       "expected_transcript_source": "Human transcript of samples/jfk.wav (JFK inaugural address), not a model capture.",
@@ -2704,6 +2736,17 @@
       "si_sdr_min_db": 10.0,
       "si_sdr_gain_min_db": 10.0,
       "_check_note": "Mixture = samples/jfk.wav + a synthetic piano/drum bed at 0 dB SNR, built by run_one.py, so the clean sources are known exactly. Gate: SI-SDR of the vocals stem against the clean speech, its gain over the unseparated mixture, and an RMS ratio in 0.5..2 (SI-SDR is scale-invariant)."
+    },
+    {
+      "name": "voice-isolator-q8_0",
+      "backend_id": "voice-isolator",
+      "task": "separate",
+      "gguf": {"repo": "cstr/inworld-voice-isolator-GGUF", "revision": "c39fed591701e6b2ed4bbf4973b308d66c15d382", "file": "voice-isolator-q8_0.gguf"},
+      "synth": {"kind": "speech_music", "sr": 48000, "speech_sample": "samples/jfk.wav", "chords": [["C", "maj"], ["G", "maj"], ["A", "min"], ["F", "maj"]], "bpm": 100, "snr_db": 0},
+      "speech_stem": "voice",
+      "si_sdr_min_db": 3.0,
+      "si_sdr_gain_min_db": 3.0,
+      "_check_note": "Inworld Voice Isolator v1 offline (#602), mono 48 kHz stems voice/background. Mixture = samples/jfk.wav + a synthetic piano/drum bed at 0 dB SNR built by run_one.py. Gate: SI-SDR of the voice stem vs the clean speech, its gain over the mixture, RMS ratio 0.5..2. Measured locally 2026-11-19: 4.48 dB (mixture -0.01 dB, gain +4.48), RMS ratio 0.970; the model keeps part of the tonal bed at 0 dB SNR, so the gates are set below that, well above a passthrough (gain 0). Stage parity vs upstream is separate: crispasr-diff voice-isolator against cstr/crispasr-regression-fixtures voice-isolator/jfk-noisy-3s/offline-ref.gguf."
     },
     {
       "name": "opus-mt-de-en-q8_0",

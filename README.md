@@ -1,6 +1,6 @@
 # CrispASR
 
-**One C++ binary, 147 backends — 71 of them TTS engines — plus multilingual text translation, zero Python dependencies.**
+**One C++ binary, 148 backends — 71 of them TTS engines — plus multilingual text translation, zero Python dependencies.**
 
 CrispASR started as a fork of [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and extends that base into a **unified speech engine** called `crispasr`, backed by full ggml C++ runtimes for major open-weights ASR *and* TTS architectures. One build, one binary, one consistent CLI — pick the backend at the command line or let CrispASR auto-detect it from your GGUF file. See [Text-to-Speech](#text-to-speech-models) for the TTS side.
 
@@ -25,7 +25,7 @@ live transcription + TTS + language detection, auto-deployed from `hf-space/`.
 
 | Project | What it does |
 |---|---|
-| **[CrispASR](https://github.com/CrispStrobe/CrispASR)** | This repo — C++ speech engine. 147 backends (71 TTS), CLI + HTTP server + C-ABI + Python/Rust/Dart/Go/Ruby/Java bindings. |
+| **[CrispASR](https://github.com/CrispStrobe/CrispASR)** | This repo — C++ speech engine. 148 backends (71 TTS), CLI + HTTP server + C-ABI + Python/Rust/Dart/Go/Ruby/Java bindings. |
 | **[CrisperWeaver](https://github.com/CrispStrobe/CrisperWeaver)** | Cross-platform Flutter transcription app built on CrispASR. Desktop + mobile,  model browser with download queue, mic capture, SRT/VTT/JSON export, diarization, batch processing. Fully offline. |
 | **[CrispEmbed](https://github.com/CrispStrobe/CrispEmbed)** | Text-related engine via ggml — same philosophy as CrispASR but for embeddings, retrieval, OCR and OMR, Math and Music Notation. Numerous architectures (XLM-R, Qwen3-Embed, Gemma3, ModernBERT, ...), dense + sparse + ColBERT + reranking. PP-OCR, Tesseract, EasyOCR, InternVL2, etc. Python/Rust/Dart bindings. |
 | **[Susurrus](https://github.com/CrispStrobe/Susurrus)** | Python ASR GUI with 9 backends (faster-whisper, mlx-whisper, voxtral, insanely-fast-whisper, ...). The Python counterpart to CrispASR's C++ approach. |
@@ -154,7 +154,7 @@ step. See **[docs/troubleshooting.md](docs/troubleshooting.md)**.
 
 ## Supported backends
 
-CrispASR ships **147 backends** (see the [generated feature matrix](docs/feature-matrix.md) for the authoritative, auto-counted list) — the majority for transcription/translation, and
+CrispASR ships **148 backends** (see the [generated feature matrix](docs/feature-matrix.md) for the authoritative, auto-counted list) — the majority for transcription/translation, and
 **71 TTS engines** for synthesis. It also ships audio-to-audio S2S backends,
 including Sidon restoration and the VoxCPM2 AudioVAE speech upscaler; see the [feature matrix](docs/feature-matrix.md)
 for the complete capability list.
@@ -172,6 +172,7 @@ from the GGUF metadata. Jump to the [TTS table](#text-to-speech-models) for the 
 | **parakeet** | [`nvidia/parakeet-tdt-0.6b-v3`](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | FastConformer + TDT | 25 EU (auto-detect) | CC-BY-4.0 |
 | **parakeet** | [`oruk/orukeet`](https://huggingface.co/cstr/orukeet-GGUF) (`-m orukeet`) | parakeet-tdt-0.6b-v3 fine-tune, half the encoder's depthwise kernels replaced by fitted Gabor functions | 25 EU (auto-detect) | CC-BY-SA-4.0 |
 | **parakeet** | [`moondream/parakeet-ultra`](https://huggingface.co/cstr/parakeet-ultra-GGUF) (`-m parakeet-ultra`) | parakeet-tdt-0.6b-v3 architecture shipped in transformers format; converted with `--hf` | 25 EU (auto-detect) | CC-BY-4.0 |
+| **parakeet** | [`FluidVoice-Labs/fluid-speech-pro`](https://huggingface.co/cstr/fluid-speech-pro-GGUF) (`-m fluid-speech-pro`, `-m fluid-speech-pro-clean`) | parakeet-tdt-0.6b-v3 + one FrameCleaner block after subsampling; optional clean mode (no fillers/repetitions) folded in at conversion | 25 EU (auto-detect) | CC-BY-4.0 |
 | **parakeet** | [`moondream/parakeet-redux`](https://huggingface.co/cstr/parakeet-redux-GGUF) (`-m parakeet-redux`) | parakeet-tdt-0.6b-v3 with a ternary (base-3 packed) encoder, dequantised exactly by the converter | 25 EU (auto-detect) | CC-BY-4.0 |
 | **phonon2** | [`FermionResearch/Phonon-2`](https://huggingface.co/cstr/phonon2-GGUF) (`-m phonon2`) | Parakeet TDT v3 with retrained five-value encoder weights; [conversion and validation](docs/phonon2.md), [architecture](docs/architecture.md#phonon2) | English | CC-BY-4.0 |
 | **parakeet** | [`nvidia/parakeet-tdt-0.6b-v2`](https://huggingface.co/cstr/parakeet-tdt-0.6b-v2-GGUF) | FastConformer + TDT, original Open ASR Leaderboard topper | en (mixed-case + punct) | CC-BY-4.0 |
@@ -206,6 +207,7 @@ from the GGUF metadata. Jump to the [TTS table](#text-to-speech-models) for the 
 | **raon-speech** | [`KRAFTON/Raon-Speech-9B`](https://huggingface.co/cstr/raon-speech-9b-GGUF) | Qwen3-Omni audio tower + adaptor + Qwen3 36L LLM (speech-to-text subset; 8 s chunks at 24 kHz) | en, ko | CC-BY-NC-4.0 (non-commercial) |
 | **rumble-2-flash** | [`Reson8/Rumble-2-Flash`](https://huggingface.co/Reson8/Rumble-2-Flash) | Qwen3-ASR 0.5B fine-tune (audio 18L + Qwen3 14L LLM, 99.6k vocab, Reson8 control tokens) | 45 | Apache-2.0 |
 | **qwen3-ja-anime** | [`jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame-hf`](https://huggingface.co/jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame-hf) | Qwen3-ASR-1.7B fine-tuned for Japanese anime/galgame speech | ja + 30 langs | Apache-2.0 |
+| **musci-asr** | [`Musci-research/Musci-ASR-qwen-1019`](https://huggingface.co/cstr/musci-asr-qwen-1019-GGUF) | Qwen3-ASR-1.7B GRPO fine-tune (Open ASR Leaderboard data) | 30 langs | Apache-2.0 |
 | **mega-asr** | [`zhifeixie/Mega-ASR`](https://huggingface.co/zhifeixie/Mega-ASR) | Qwen3-ASR-1.7B + merged robustness LoRA; always-on robust path | noisy / degraded speech | Apache-2.0 |
 | **higgs-stt** | [`bosonai/higgs-audio-v3-stt`](https://huggingface.co/bosonai/higgs-audio-v3-stt) | Whisper-large-v3 encoder (4 s chunked) + Qwen3-1.7B LLM ([more](docs/architecture.md#higgs-stt)) | en | Apache-2.0 |
 | **wav2vec2** | [`jonatasgrosman/wav2vec2-large-xlsr-53-english`](https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-english) | CNN + 24L transformer + CTC head (any Wav2Vec2ForCTC) | per-model | Apache-2.0 |
@@ -441,6 +443,11 @@ for the per-task flags and output formats.
   The [**SCNet / SCNet-large candidate backend**](docs/scnet.md) adds native
   four-stem separation with local F16/Q8_0/Q4_K GGUFs; original-checkpoint
   fidelity and paired performance remain qualification gates.
+- **Voice isolation** (`--separate` with a [**voice-isolator**](docs/voice-isolator.md)
+  GGUF) — Inworld Voice Isolator v1 (Apache-2.0, 48 kHz): cleans noisy speech
+  into `<input>_voice.wav` plus the removed `<input>_background.wav`. Offline
+  and realtime (causal, 20 ms look-ahead) checkpoints; also served by
+  `--separate-model` on `/v1/audio/separation` and `Session.separate()`.
 - **Piano transcription** (`--backend piano-transcription`) — piano audio →
   note events (88 keys @ 100 fps, ByteDance/Kong CRNN; F16 GGUF ≈ 77 MB).
 - **Polyphonic note events** (`--backend basic-pitch`) — Spotify Basic Pitch,
@@ -530,7 +537,7 @@ Full reference + tuning knobs (cluster threshold, max speakers, pluggable embedd
 
 **Voice activity detection**: `--vad` uses the default Silero VAD (~885 KB, auto-downloaded). Each VAD segment is transcribed independently, producing separate SRT/VTT entries with correct timestamps. Use `--vad --split-on-punct` for best subtitle output. Four VAD backends: Silero (default), FireRedVAD (`-vm firered`, recommended), MarbleNet (`-vm marblenet`, 439 KB, 6 languages), Whisper-VAD-EncDec (`-vm whisper-vad`, experimental).
 
-**Punctuation restoration** (`--punc-model`): CTC-based backends output lowercase without punctuation. Named shortcuts: `auto`/`firered` (Chinese+English), `fullstop` (EN/DE/FR/IT, XLM-R-large), `punctuate-all` (12 languages, XLM-R-base), `pcs` (47 languages, punc + truecasing + sentence boundary detection in one model). Or pass a GGUF path directly. Also available via Python/Rust/Dart wrappers (`crispasr.PuncModel`).
+**Punctuation restoration** (`--punc-model`): CTC-based backends output lowercase without punctuation. Named shortcuts: `auto`/`firered` (Chinese+English), `fullstop` (EN/DE/FR/IT, XLM-R-large), `punctuate-all` (12 languages, XLM-R-base), `pcs` (47 languages, punc + truecasing + sentence boundary detection in one model; a 167 MB mixed-precision 4-bit file with encoder layer 0 and the truecase head at Q8_0. The older all-4-bit files stay selectable as `pcs-q4k` and `pcs-q4k-imatrix`). Or pass a GGUF path directly. Also available via Python/Rust/Dart wrappers (`crispasr.PuncModel`).
 
 **Truecasing** (`--truecase-model`): Restore German noun/name capitalization in lowercase ASR output. Three options in ascending quality: `auto` (statistical, 1.7 MB), `crf` (CRF with context, 8.5 MB), `lstm` (BiLSTM char-level, 3.2 MB, **recommended** — 97.9% F1, handles adjective/noun distinction and formal "Ihnen"). All auto-download from [`cstr/truecaser-de`](https://huggingface.co/cstr/truecaser-de). Or use `--punc-model pcs` for neural punc + truecasing in one pass (47 languages).
 

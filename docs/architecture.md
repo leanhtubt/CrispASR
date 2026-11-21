@@ -271,7 +271,8 @@ constructed, and its own capability bit (used for detection and help text,
 never for routing). `docs/source-separation-surface.md` settled this design;
 everything below follows it.
 
-- **Source separation** (`htdemucs`, `mel-band-roformer`, `mini-bs-roformer`) — one mixed input
+- **Source separation** (`htdemucs`, `mel-band-roformer`, `mini-bs-roformer`, `scnet`,
+  `voice-isolator`) — one mixed input
   → N named stems of the *user's own* audio. `CAP_SEPARATE` (bit 22),
   `--separate`, `src/core/separation_io.h`, `crispasr_separate_cli.{h,cpp}`.
   Output is one WAV per stem at the model's native rate, with **no
@@ -1134,6 +1135,25 @@ the same runtime. F16 conversion, Q8_0/Q4_K precision policy, exact blueprint
 layouts and numerical/performance qualification are documented in
 [the model guide](mini-bs-roformer.md) and
 [the qualification guide](mini-bs-roformer-validation.md).
+
+### voice-isolator
+
+Inworld Voice Isolator v1 (Apache-2.0, `inworld/voice-isolator`) isolates
+the foreground voice of 48-kHz mono audio; the removed background is
+`input - voice`. GGUF architecture and backend name are both
+`voice-isolator`; the offline (`voice-isolator-v1`) and realtime
+(`voice-isolator-v1-realtime`, causal, trained look-ahead 0/2/4 frames)
+checkpoints share one runtime (`src/voice_isolator.{h,cpp}`).
+
+A band-split dual-path network over the STFT (n_fft 2048, hop 480): 46
+bands become 512-wide tokens; seven blocks alternate time attention
+(split-half RoPE, exclusive self attention) + band attention with
+bidirectional Mamba along time + Mamba across bands (ggml `ssm_conv` /
+`ssm_scan`); per-band heads emit a bounded complex mask and residual added to
+the input spectrum. STFT/iSTFT and the correction stay F32 on the host; each
+block is its own ggml graph so peak memory is one block's activations.
+Offline rendering follows upstream `enhance()` (8 s windows, 2 s linear
+crossfade, last window reaching back). See [the model guide](voice-isolator.md).
 
 ### piano-transcription
 
@@ -2380,6 +2400,32 @@ per group. The converter unpacks them exactly, so the GGUF holds ordinary
 F16/Q8_0/Q4_K weights. The reference is transformers' `ParakeetForTDT`
 (`tools/reference_backends/parakeet_hf.py`), with moondream's Photon runtime
 as an independent transcript check.
+
+
+### fluid-speech-pro
+
+FluidVoice's `fluid-speech-pro` (CC-BY-4.0, #595) is parakeet-tdt-0.6b-v3
+plus one residual block on the subsampled frames, before the first Conformer
+layer. Upstream (`fluid_speech.py`) registers it as a forward hook on
+`encoder.pre_encode`:
+
+    x + up(gelu(dwconv15(down(LayerNorm(x)))))   # 1024 -> 1024, depthwise K=15
+
+Its transformers weights and its parakeet.cpp GGUF leave this block out.
+We convert from the `.nemo`, which keeps the block as `encoder.fv_insert.*`.
+The parakeet runtime runs the block whenever those tensors are present
+(`parakeet_build_fv_insert`), and its output is what the `pre_encode_output`
+diff stage compares.
+
+The `.nemo` also has an optional rank-32 "clean mode" adapter (`clean_mode.*`).
+It gives edited text without fillers or repeated words. `--clean-mode` folds
+it into the weights like upstream: `W += alpha/rank * B @ A` on 264 encoder
+linears, the decoder input vector goes into the LSTM layer-0 input bias, and
+the joint vector goes into `joint.pred.bias`. This gives a separate GGUF
+(`-m fluid-speech-pro-clean`) that needs no runtime code. The NeMo reference
+(`tools/reference_backends/parakeet.py`) attaches the block, and folds clean
+mode when `CRISPASR_REF_FLUID_CLEAN=1`. CI validation:
+`tools/ci-heavy/fluid_speech_validate.py`.
 
 ### parakeet-ctc-1.1b-ja
 
