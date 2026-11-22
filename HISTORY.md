@@ -1,3 +1,51 @@
+## 2026-11-22 — Extended nightly: outetts repetition penalty, disclaimer strip, MinGW test build
+
+- **outetts** (`src/outetts.cpp`): the repetition penalty divided a token's logit once per previous OCCURRENCE (1.1^k). Upstream OuteTTS 0.3 samples through HF `generate(repetition_penalty)` / llama.cpp `repeat_penalty`, which penalise each distinct context token once. Now the same, over prompt + generated, through the shared `core/repetition_penalty.h` (moved from `breeze_cfg.h`, #594). The nightly roundtrip had failed on 11-17, 11-20 and 11-22 ("…over the le the crit doll the dou b…"); one seeded sample flipped with the runner CPU. Kaggle CPU A/B, 12 seeds, parakeet roundtrip: mean WER 0.176 → 0.019, exact 4/12 → 10/12, worst 0.89 → 0.11.
+- **Regression harness** (`tests/regression/run_one.py`): `strip_ai_disclaimer` compared words positionally, so ASR merging "This audio" into "Saudio" shifted every word and cosyvoice3-0.5b failed with a perfect phrase (WER 0.67). It now strips the best edit-distance-aligned prefix (n±3 words, ≤2 edits).
+- **msys2 build**: `test-core-gap-fill-policy` used POSIX `setenv`; now `_putenv_s` on Windows.
+
+## 2026-11-21 — VibeVoice on AMD Vulkan: integer-dot matmul NaNs; CLI follows the checkpoint (#589)
+
+- **ASR and voice cloning on Vulkan** (`ggml` `ef9e36f6`, backport of llama.cpp `411d548515`): ggml-vulkan's integer-dot matmul (MMQ) skipped the A-side shared-memory write for k steps past the end but still read those slots, so a stale or uninitialized scale reached `A.dm * (q_sum * B.d - B.s)` and produced NaN. RADV takes this path by default when the GPU has integer dot product (the reporter's RX 6800). VibeVoice-ASR 7B decoded only token 0 ("!!!!"), and base TTS lost cloning. Reproduced on an M1 with MoltenVK and `GGML_VK_FORCE_INTEGER_DOT_PRODUCT=1`:
+  - `test-backend-ops -o MUL_MAT`: 10 / 1619 NaN, a different set each run → 1619 / 1619 three times.
+  - ASR JFK: "!!!!" → the correct transcript.
+  - 1.5B base TTS: silence → clone; speaker cosine 0.737 vs 0.566 for the no-reference baseline.
+- **CLI follows the checkpoint, not the alias:** every VibeVoice GGUF auto-detects as `vibevoice` by file name, and a TTS checkpoint there used to fail with "use --backend vibevoice-tts". Under that alias, the base 7B was then treated as the realtime model and asked for a voice pack. Now a TTS checkpoint is kept for `--tts` and in server mode. Base checkpoints (1.5B, 7B) synthesize a generic voice without one and clone from a WAV. Only the realtime 0.5B requires a voice prompt: without one it garbles text ("quick brown farts" in an ASR roundtrip). New `vibevoice_is_realtime_tts()`; the library warns once when a realtime model runs without a voice.
+
+## 2026-11-21 — Haas-ja: subtitle-sized segments within a 30 s chunk (#605)
+
+- **Regression caught before release:** with the upstream long-form recipe (`ba4aec81`), each 30 s chunk came back as one segment, so `--output-srt` wrote 24-29 s cues (7 on the #605 file). With `--vad` the 30 s slices did the same (up to 25 s). The 12 s VAD slices used to double as cue boundaries.
+- **Fix:** `parakeet_cue_starts` cuts a chunk's words into segments at pauses of >= 0.6 s and before 12 s. Each segment's text is its own tokens concatenated, as the decoder builds the full text, so Japanese gets no spaces and the transcript is byte-identical. #605 file: 27 cues, median 1.4 s, max 9.7 s without VAD; 29 cues, max 8.9 s with `--vad`. Session C ABI: same 27 segments.
+
+## 2026-11-21 — Haas-ja: byte-fallback kanji restored; accuracy verified against the original model (#605)
+
+- **Bug:** Haas-ja's SentencePiece vocabulary spells kanji outside its 3,072 pieces as `<0xHH>` byte pieces (256 of them; parakeet-ja has none). `spiece_to_text` treated every `<...>` piece as a control token, so those characters vanished: 骨董品 → 骨品, and 娯, 徘徊, 焉, 竣, 踵, 癌, 塵 were lost. The new `core_spm::piece_to_text` (`src/core/spm_piece.h`) decodes byte pieces to their raw byte; consecutive tokens reassemble the character. `test-core-spm-piece` failed on the old behaviour.
+- **Verification** (`tools/kaggle/haas-ja-bench-verify`, upstream eval script, jacer v1.2): the original model reproduces its model card. FLEURS 3.67 / 2.98 / 2.35 % (card 3.67 / 2.98 / 2.34), JSUT 5.33 / 2.44 / 1.37 % (card 5.32 / 2.43 / 1.36). CrispASR Q8_0 on the same FLEURS audio: 3.77 / 3.11 / 2.54 % before the fix, 3.69 / 3.02 / 2.36 % after; 605 / 650 transcripts byte-identical to the original.
+
+## 2026-11-21 — Haas-ja uses its upstream long-form recipe (#605)
+
+- **Change:** Haas-ja no longer inherits parakeet-ja's #89 long-audio workarounds (VAD forced on, 12 s slices). Like upstream `haas_asr.transcribe_longform`, it cuts 30 s chunks at the quietest 0.1 s within 2 s of each target and decodes each in one pass. `parakeet_quiet_point_bounds` is a sample-exact port of `split_at_quiet_points` (unit-tested against the upstream Python). An explicit `--vad` caps slices at 30 s. The session C ABI takes the same route. `CRISPASR_HAAS_LONGFORM=0` restores the old path.
+- **Original model check:** Kaggle kernel `tools/kaggle/haas-ja-blueprint-longform` ran the upstream code (NeMo 2.7.3, flash-linear-attention 0.5.2, T4) on the #605 file. bf16 and fp32 gave identical text. Our port on the same chunks is byte-identical in 6 of 7 chunks; the seventh differs by one character (数の子 / 数子).
+- **Evidence** (bigram recall / precision, `tools/asr_coverage_score.py --strip-latin --reading`):
+  - #605 file vs whisper-turbo: 75.7 / 85.0 → 80.7 / 83.9. The original model scores 80.4 / 83.6.
+  - #605 file vs whisper-large-v3: 62.9 / 77.4 → 70.4 / 80.2.
+  - The two whisper references agree with each other only 72.1 / 79.0 on this audio, which bounds what any score against them means.
+  - #89 podcast: 96.9 / 96.8 → 95.7 / 97.3 (no regression).
+
+## 2026-11-21 — Gap-fill stops inventing subtitles on noisy JA audio (#605)
+
+- **Report:** Haas-ja on a 3-minute game stream (`--vad`, FireRed VAD) gave 45 cues with gap-fill against 19 without. Many were short and wrong: "隠しのように" in a pause, a 9 s "ーーっ。っ。" over game audio, "はい" doubled as "はい。".
+- **Cause:** the #89 gap-fill re-transcribes every >= 1 s empty span in a slice. On parakeet-ja that recovers speech its encoder blanked; on this audio the spans were pauses and sound effects, and a short window of noise makes the TDT decoder invent words. The CLI pass also lacked the seam guard the library's non-JA repair already had.
+- **Fix** (shared `src/core/gap_fill_policy.h`, used by the CLI/server pass and the session C ABI):
+  - Haas-ja (KDA predictor, new `parakeet_predictor_is_kda()`) defaults gap-fill off. `CRISPASR_GAP_FILL=1` forces it.
+  - A recovered run is kept only if its mean token confidence reaches 0.85 (`CRISPASR_GAP_FILL_MIN_CONF`). First-pass words sit at median 0.997, the junk at 0.1-0.6.
+  - A recovered word repeating a kept word within 0.5 s (punctuation-insensitive) is dropped.
+- **Evidence** (bigram recall / precision vs whisper-large-v3-turbo, `tools/asr_coverage_score.py --strip-latin --reading`, M1):
+  - #605 clip, CLI: Haas-ja default = the reporter's `GAP_FILL=0` output byte for byte (75.7 / 85.0, 19 cues; was 77.7 / 75.0, 49 cues). Forced on: 76.8 / 84.9, 21 cues. parakeet-ja: 76.0 / 75.0 → 75.5 / 77.8.
+  - #605 clip, session ABI: Haas-ja 79.0 / 67.1 → 78.2 / 83.7; parakeet-ja 78.7 / 59.6 → 77.4 / 68.8.
+  - #89 podcast (60 s / 120 s): parakeet-ja keeps every recovery (95.7 / 93.4 and 96.0 / 92.6, unchanged). Haas-ja without gap-fill 96.9 / 89.7 and 96.8 / 90.5, the same as with it.
+- **Tests:** `test-issue-605-gap-fill-junk` (scripted backend; failed before the fix on the pause junk and the seam duplicate) and `test-core-gap-fill-policy`.
+
 ## 2026-11-20 — `--punc-model pcs` downloads the mixed-precision PCS file
 
 - **Change:** `pcs` now resolves to `pcs-xlmr-base-q4_k-mixed.gguf`, pinned to `cstr/pcs-xlmr-base-GGUF@a685c2ea` (SHA-256 `341c26b8…2839`, 167 MB). The file is Q4_K + imatrix with encoder layer 0 and the truecase head at Q8_0. The previous plain-Q4_K default stays selectable as `pcs-q4k`; the Q4_K + imatrix file is `pcs-q4k-imatrix`.

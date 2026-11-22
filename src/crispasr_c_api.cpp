@@ -16,6 +16,7 @@
 #include "core/win_compat.h"
 #include "core/arch_backend_map.h" // #335: general.architecture → backend table, SHARED with the CLI
 #include "core/backend_aliases.h"
+#include "core/gap_fill_policy.h" // #605: gap-fill policy, SHARED with the CLI
 #include "core/parakeet_gguf.h"
 #include "core/bpe.h"
 #include "core/utf8.h"
@@ -6699,7 +6700,9 @@ static crispasr_session_result* transcribe_single(crispasr_session* s, const flo
         // Keep JA on the established slice/gap-fill path until that path is
         // deliberately hoisted too; routing JA through the generic streamed
         // branch loses the interior-content guarantee from issue #89.
-        if (_unified && !is_ja) {
+        // Issue #605: Haas-ja takes its upstream long-form recipe, which lives
+        // in the shared orchestrator, not the parakeet-ja slice path below.
+        if (_unified && (!is_ja || parakeet_uses_haas_longform(s->parakeet_ctx))) {
             parakeet_orchestrate_opts oo;
             oo.chunk_seconds_explicit = s->parakeet_force_chunk_seconds > 0;
             oo.chunk_seconds = s->parakeet_force_chunk_seconds > 0 ? s->parakeet_force_chunk_seconds : 0;
@@ -6751,9 +6754,12 @@ static crispasr_session_result* transcribe_single(crispasr_session* s, const flo
             int64_t min_gap_cs = 100;
             if (const char* e = getenv("CRISPASR_GAP_FILL_MIN_CS"))
                 min_gap_cs = std::max((int64_t)30, (int64_t)atoi(e));
-            bool gap_fill = true;
-            if (const char* e = getenv("CRISPASR_GAP_FILL"))
-                gap_fill = atoi(e) != 0;
+            // #605: same policy as the CLI (src/core/gap_fill_policy.h). Haas-ja
+            // (KDA predictor) has no #89 drop and defaults off; a recovery must
+            // clear the confidence gate; a refill repeating the word at the
+            // seam is dropped.
+            const bool gap_fill = core_gap_fill::enabled(!parakeet_predictor_is_kda(s->parakeet_ctx));
+            const float min_conf = core_gap_fill::min_run_confidence();
             constexpr int64_t kEdgePadCs = 20;
             constexpr int64_t kCoverSlopCs = 30;
 
@@ -6775,10 +6781,13 @@ static crispasr_session_result* transcribe_single(crispasr_session* s, const flo
                 // Gap-fill rounds within this slice.
                 for (int round = 0; gap_fill && round < 2; ++round) {
                     std::vector<std::pair<int64_t, int64_t>> merged;
+                    std::vector<std::pair<int64_t, std::string>> seam;
                     {
                         std::vector<std::pair<int64_t, int64_t>> cov;
-                        for (const auto& w : sw)
+                        for (const auto& w : sw) {
                             cov.push_back({w.t0, std::max(w.t1, w.t0 + 1)});
+                            seam.push_back({w.t0, core_gap_fill::norm_word(w.text)});
+                        }
                         std::sort(cov.begin(), cov.end());
                         for (auto& iv : cov) {
                             if (!merged.empty() && iv.first <= merged.back().second + kCoverSlopCs)
@@ -6808,6 +6817,7 @@ static crispasr_session_result* transcribe_single(crispasr_session* s, const flo
                             continue;
                         std::vector<parakeet_session_owned_word> fw;
                         run_window(w0, w1, win0_cs, fw);
+                        std::vector<parakeet_session_owned_word> run;
                         for (auto& w : fw) {
                             const int64_t mid = (w.t0 + w.t1) / 2;
                             if (mid < g.first - kCoverSlopCs || mid >= g.second + kCoverSlopCs)
@@ -6818,11 +6828,23 @@ static crispasr_session_result* transcribe_single(crispasr_session* s, const flo
                                     covered = true;
                                     break;
                                 }
-                            if (!covered) {
-                                sw.push_back(std::move(w));
-                                recovered = true;
-                            }
+                            if (covered ||
+                                core_gap_fill::is_seam_duplicate(w.t0, core_gap_fill::norm_word(w.text), seam))
+                                continue;
+                            run.push_back(std::move(w));
                         }
+                        std::vector<float> conf;
+                        for (const auto& w : run)
+                            for (const auto& tk : w.native_tokens)
+                                if (!core_gap_fill::is_blank(tk.text))
+                                    conf.push_back(tk.p);
+                        if (run.empty() || !core_gap_fill::run_is_confident(conf, min_conf))
+                            continue;
+                        for (auto& w : run) {
+                            seam.push_back({w.t0, core_gap_fill::norm_word(w.text)});
+                            sw.push_back(std::move(w));
+                        }
+                        recovered = true;
                     }
                     if (!recovered)
                         break;
