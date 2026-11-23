@@ -1971,6 +1971,7 @@ struct crispasr_session {
     crispasr_voice::SpeakerIdentity voice_pack_identity = crispasr_voice::SpeakerIdentity::Unknown;
     crispasr_voice::SpeakerIdentity speaker_identity_override = crispasr_voice::SpeakerIdentity::Unknown;
     std::string voice_path;
+    std::filesystem::path last_voice_samples_tmp_wav;
     // Cached disclosure PCM. The disclaimer is a fixed sentence in the session's
     // neutral voice, so it is identical for every clip — but the documented
     // recipe (fetch -> set_voice -> synthesize -> prepend) is per-clip, which
@@ -9922,10 +9923,12 @@ extern "C" int crispasr_audio_load_at_rate(const char* path, int target_rate, fl
 // One behaviour, one audit trail.
 //
 // So the write still happens — but inside the library, once, in the system temp
-// directory, and it is cleaned up on every exit path. The caller's problem
-// (materialising and reaping temp files around a Vec<f32>) is solved; the
-// library's own IO is an implementation detail that per-backend PCM routes can
-// remove later without changing this signature.
+// directory. Some backends (VibeVoice) keep only the PATH and read the WAV at
+// synthesis time (#608), so the file lives until the next set_voice_samples
+// call or crispasr_session_close; a failed set_voice removes it at once. The
+// caller's problem (materialising and reaping temp files around a Vec<f32>) is
+// solved; the library's own IO is an implementation detail that per-backend PCM
+// routes can remove later without changing this signature.
 CA_EXPORT int crispasr_session_set_voice_samples(crispasr_session* s, const float* pcm, int32_t n_samples,
                                                  int32_t sample_rate, const char* ref_text_or_null) {
     if (!s || !pcm || n_samples <= 0 || sample_rate <= 0)
@@ -9960,7 +9963,15 @@ CA_EXPORT int crispasr_session_set_voice_samples(crispasr_session* s, const floa
     }
 
     const int rc = crispasr_session_set_voice(s, tmp.string().c_str(), ref_text_or_null);
-    std::filesystem::remove(tmp, ec); // best effort; the reference is already loaded
+    if (rc != 0) {
+        std::filesystem::remove(tmp, ec); // nothing references it
+        return rc;
+    }
+    if (!s->last_voice_samples_tmp_wav.empty()) {
+        // The previous reference is superseded; its backend state was replaced above.
+        std::filesystem::remove(s->last_voice_samples_tmp_wav, ec); // best effort
+    }
+    s->last_voice_samples_tmp_wav = tmp;
     return rc;
 }
 
@@ -13061,6 +13072,11 @@ CA_EXPORT void crispasr_session_close(crispasr_session* s) {
         std::lock_guard<std::mutex> reg(g_stream_session_mtx);
         if (g_stream_session == s)
             g_stream_session = nullptr;
+    }
+
+    if (!s->last_voice_samples_tmp_wav.empty()) {
+        std::error_code ec;
+        std::filesystem::remove(s->last_voice_samples_tmp_wav, ec); // best effort
     }
 #ifdef CA_HAVE_FIREREDPUNC
     if (s->punc_ctx)
