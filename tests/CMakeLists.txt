@@ -402,6 +402,18 @@ target_compile_definitions(${VAD_TEST} PRIVATE
 add_test(NAME ${VAD_TEST} COMMAND ${VAD_TEST})
 set_tests_properties(${VAD_TEST} PROPERTIES LABELS "unit")
 
+# Speech across a forced --vad-max-speech-duration-s cut (silero-vad #813);
+# the legacy run is the negative control and must see the old gap.
+add_executable(test-vad-max-split test-vad-max-split.cpp)
+target_include_directories(test-vad-max-split PRIVATE ../include ../ggml/include ../examples)
+target_link_libraries(test-vad-max-split PRIVATE common)
+target_compile_definitions(test-vad-max-split PRIVATE
+    VAD_MODEL_PATH="${PROJECT_SOURCE_DIR}/models/for-tests-silero-v6.2.0-ggml.bin")
+add_test(NAME test-vad-max-split COMMAND test-vad-max-split)
+add_test(NAME test-vad-max-split-legacy COMMAND test-vad-max-split)
+set_tests_properties(test-vad-max-split-legacy PROPERTIES ENVIRONMENT "CRISPASR_VAD_LEGACY_MAX_SPLIT=1")
+set_tests_properties(test-vad-max-split test-vad-max-split-legacy PROPERTIES LABELS "unit")
+
 #VAD test full uses crispasr_full with VAD enabled
 set(VAD_TEST test-vad-full)
 add_executable(${VAD_TEST} ${VAD_TEST}.cpp)
@@ -7315,3 +7327,36 @@ target_link_libraries(vibevoice-negative-history-probe PRIVATE crispasr-core ggm
 include(${PROJECT_SOURCE_DIR}/cmake/SanitizedPythonTests.cmake)
 crispasr_preload_asan_for_python_tests(
     gguf-detector-metadata haas-dispatch-entrypoints test-quantizer-io)
+
+# ─── test-cpu-linear — core_cpu_linear BLAS vs scalar parity (PR #611) ───────
+# Links crispasr-cpu-blas like firered-vad; asserts the BLAS path is compiled
+# in exactly when CMake found CPU BLAS. No model required.
+add_executable(test-cpu-linear test-cpu-linear.cpp)
+target_include_directories(test-cpu-linear PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test-cpu-linear PRIVATE Catch2::Catch2WithMain crispasr-cpu-blas)
+if(CRISPASR_CPU_BLAS_AVAILABLE)
+    target_compile_definitions(test-cpu-linear PRIVATE CRISPASR_EXPECT_CPU_BLAS=1)
+endif()
+catch_discover_tests(test-cpu-linear
+    TEST_SPEC "[unit]"
+    PROPERTIES LABELS "unit;firered"
+)
+
+# ─── test-gpu-plugin-hint — GPU plugin load-failure advice wording (#606) ────
+add_executable(test-gpu-plugin-hint test-gpu-plugin-hint.cpp)
+target_include_directories(test-gpu-plugin-hint PRIVATE ${PROJECT_SOURCE_DIR}/examples/cli)
+target_link_libraries(test-gpu-plugin-hint PRIVATE Catch2::Catch2WithMain)
+catch_discover_tests(test-gpu-plugin-hint
+    TEST_SPEC "[unit]"
+    PROPERTIES LABELS "unit;diag"
+)
+
+# ─── test-bt2-sampling — per-call bt2-tts sampling knobs (#609 follow-up) ────
+add_executable(test-bt2-sampling test-bt2-sampling.cpp)
+target_include_directories(test-bt2-sampling PRIVATE ${PROJECT_SOURCE_DIR}/examples/cli)
+target_compile_definitions(test-bt2-sampling PRIVATE CRISPASR_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_link_libraries(test-bt2-sampling PRIVATE Catch2::Catch2WithMain)
+catch_discover_tests(test-bt2-sampling
+    TEST_SPEC "[unit]"
+    PROPERTIES LABELS "unit;tts"
+)

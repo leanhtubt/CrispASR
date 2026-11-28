@@ -146,6 +146,7 @@ surviving artifact. Applied on both the CLI and the session C-ABI.
 | Variable | Purpose |
 |----------|---------|
 | `CRISPASR_SENTENCE_ABBREV` | Default ON. TTS long-form chunking and `--split-on-punct` subtitles use live translation's sentence-end rule for `.`, so ordinals, initials and known abbreviations (`am 3. Oktober`, `z. B.`, `Dr.`, `Mr.`) stay inside the sentence. On 1,776 UD German GSD sentences this cut false splits from 72 to 8. `0` restores the bare `. ` rule. |
+| `CRISPASR_TTS_CLAUSE_SPLIT` | Default ON. A sentence longer than the TTS chunk cap (600 bytes) is broken at the strongest clause boundary (`;` `:` `?` `!`, a dash or a CJK fullwidth mark, then a comma, then a space; a clause mark followed by *and/but/or/...* ranks as a comma), keeping every piece at least a quarter of the cap, instead of at the last space before the cap. Each piece is one generation, and bt2-tts dropped the first word after a mid-phrase cut (#609). `0` restores the old split. |
 
 ### Alignment and VAD sanity checks
 
@@ -154,6 +155,8 @@ surviving artifact. Applied on both the CLI and the session C-ABI.
 | `CRISPASR_ALIGN_SENTINEL` | `0` disables the forced-alignment collapse check. On by default, **detect + warn only**. Catches `ctc_forced_align()` returning words at `t0 == t1 == 0` — its two silent-zero paths (characters absent from the CTC vocab, or a word the Viterbi path never visited) produce garbage timestamps inside a *successful* return. |
 | `CRISPASR_ALIGN_SENTINEL_REDISTRIBUTE` | `1` opts into repair: respace the words across the clip in proportion to character count. Off by default — a wrong auto-repair would be just as invisible as the collapse. |
 | `CRISPASR_VAD_FAILOVER` | `0` disables the VAD sanity check. On by default: if a clip over 120 s comes back with under 1% speech coverage (or a couple of segments covering under 10% of a very long clip), the VAD is wrong and the run falls back to fixed full-clip chunks rather than losing the transcript. |
+| `CRISPASR_VAD_LEGACY_MAX_SPLIT` | `1` restores the old `--vad-max-speech-duration-s` cut: speech that continues after a forced cut with no silence to cut at is dropped until its probability climbs back over the threshold. Default follows silero-vad v6.3 (#813) and keeps it in the next segment. |
+| `CRISPASR_SILERO_SOURCE_CONTEXT` | `1` runs the `--vad` Silero model with the previous 64 samples as context, as silero-vad's Python does, instead of the whisper.cpp reflect padding. Experimental: off by default until measured. hikari and index-echo always use it. |
 | `CRISPASR_NGRAM_LOOPFIX_OFF` | `1` disables the repeated-n-gram collapse entirely, exposing the RAW decoded text. Diagnostic: for telling whether a loop originates in the decode itself or is merely being masked. |
 | `CRISPASR_ORDER_WARN` | `0` disables the one-shot "segment timestamps go backwards" warning. On by default; detect + warn only. Cues that merely *overlap* are deliberately not flagged (gap-fill jitter). |
 | `CRISPASR_ALIGN_NO_ROMANIZE` | `1` passes non-Latin reference text through raw instead of auto-romanizing it for a CTC aligner with a Latin vocabulary (#252). Since #419 the romanization is only the aligner's internal label — aligned words hand back the original script, so srt/vtt/`-sp`/`-sow` output no longer flips Cyrillic/CJK transcripts to transliteration. |
@@ -379,6 +382,18 @@ suffixes.
 ### BERT encoder
 
 - `CRISPASR_BERT_ENCODER_BENCH`
+
+### Breeze TTS 2 (bt2-tts)
+
+- `CRISPASR_BT2_LENGTH_GUARD` — default on. A sampled attempt that runs past
+  40 + 10 frames per text token without ending is resampled (up to 3 tries,
+  then the full cap), because the model sometimes misses EOS (#609). `0` turns
+  it off.
+- `CRISPASR_BREEZE_EOS_TRACE=<path>` — append the per-frame end-of-speech
+  probability and rank to `<path>` (diagnostic).
+- `CRISPASR_BREEZE_BENCH` — per-stage timings on stderr.
+- `CRISPASR_BREEZE_QUANT_TEXT_EMBD` — `crispasr-quantize` only: also quantize
+  the 302 M-parameter text embedding (kept at source precision by default).
 
 ### BTC chord recognition
 
